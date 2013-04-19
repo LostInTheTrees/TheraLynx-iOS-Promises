@@ -64,25 +64,25 @@ This code shows how any method that executes a block asynchronously can be turne
 
 The following code shows how a Promise returning function can be called and how multiple async operations can be done in sequence.
 
-```- (Promise*) getThing3: (NSString*) objID1  
-// Promise is satisfied with an object of class Thing3  
-{  
-    Promise* p0 = [self getPO: objID1 // (1)  
-                      ofClass: @”Thing1”];  
-    Promise* p1 = [p0 then:^id(id result) { // (2)  
-        Thing1 *obj1 = (Thing1*) result; // (5)  
-        // Do stuff with Thing1 obj1  
-        return [self getThing2: infoFromThing1]; // (6)  
-        //getThing2 returns a Promise for a Thing2 object   
-    }];  
-    Promise* p2 = [p1 then:^id(id result) { // (3)  
-        T2Class *obj2 = (T2Class*) result; // (7)  
-        // Do stuff with typed obj2  
-        return [self getThingIWant: newInfoFromThing2 ]; // (8)  
-        //getThingIWant returns a Promise for a Thing3 object   
-    }];  
-    return p2; // (4)  
-}```
+	- (Promise*) getThing3: (NSString*) objID1  
+	// Promise is satisfied with an object of class Thing3  
+	{  
+	    Promise* p0 = [self getPO: objID1 // (1)  
+	                      ofClass: @”Thing1”];  
+	    Promise* p1 = [p0 then:^id(id result) { // (2)  
+	        Thing1 *obj1 = (Thing1*) result; // (5)  
+	        // Do stuff with Thing1 obj1  
+	        return [self getThing2: infoFromThing1]; // (6)  
+	        //getThing2 returns a Promise for a Thing2 object   
+	    }];  
+	    Promise* p2 = [p1 then:^id(id result) { // (3)  
+	        T2Class *obj2 = (T2Class*) result; // (7)  
+	        // Do stuff with typed obj2  
+	        return [self getThingIWant: newInfoFromThing2 ]; // (8)  
+	        //getThingIWant returns a Promise for a Thing3 object   
+	    }];  
+	    return p2; // (4)  
+	}
 
 1.	GetPO is executed synchronously and returns a Promise p0. It starts off an asynchronous task. When that task completes, it resolves the Promise p0 with a Thing1 object.
 2.	A Success block is attached to Promise p0. Promise p1 is returned. The Promise p1 will be resolved by whatever object is returned by the Success block of p0.
