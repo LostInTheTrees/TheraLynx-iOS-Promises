@@ -98,19 +98,19 @@ The following code shows how a Promise returning function can be called and how 
 
 The code above might be a string of asynchronous tasks that are required to complete a longer task. Code in a ViewController can call it to execute that code in the background. The final blocks though can be run on the main queue so the ViewController can continue its business.
 
-```- (Promise*) doSomethingInForeground: (id) someArgument  
-{  
-    Promise* p0 = [self getThing3: someArgument]; // (1)  
-    [p0 runOnMainQueue]; // (2)  
-    [p0 then:^id(id result) { // (3)  
-        TObject *typedObj = (TObject*) result; // (4)  
-        // Do stuff here on Main queue, including UI, VCs etc.  
-        return nil; // (5)  
-    } error:^id(NSError error) {  
-        // Log the error  
-        return nil; // (5)  
-    }];  
-}```
+	- (Promise*) doSomethingInForeground: (id) someArgument  
+	{  
+	    Promise* p0 = [self getThing3: someArgument]; // (1)  
+	    [p0 runOnMainQueue]; // (2)  
+	    [p0 then:^id(id result) { // (3)  
+	        TObject *typedObj = (TObject*) result; // (4)  
+	        // Do stuff here on Main queue, including UI, VCs etc.  
+	        return nil; // (5)  
+	    } error:^id(NSError error) {  
+	        // Log the error  
+	        return nil; // (5)  
+	    }];  
+	}
 
 1.	Call getThing3 to start an async task.
 2.	Run the blocks for this Promise on the Main queue.
@@ -122,26 +122,26 @@ The code above might be a string of asynchronous tasks that are required to comp
 
 It also turns out to be valuable to be able to create a Promise that resolves immediately. Consider getPO again, which encapsulates an asynchronous task. It’s possible that getPO might determine that an async task is not needed. However, it must return a Promise. The answer is to return a Promise that is “already resolved”. As soon as a Success block is assigned to that Promise, the promise is resolved and the Success (or Error) block is scheduled and run.
 
-```- (Promise*) getPO: (NSString*) objectID ofClass: (NSString*) class  
-// Returns a Promise for an id of type class  
-{  
-    if (!class) return [Promise resolvedWith: nil]; // (1)  
-    Promise* p0 = [Promise initWithName: @"getPO"]; // (2)  
-    PFQuery *query = [PFQuery queryWithClassName: class];  
-    [query getObjectInBackgroundWithId: objectID   
-           block: ^(PFObject *object, NSError *error)  
-    {  
-        if (object) {  
-            [p0 resolve: object];  
-        } else if (error) {  
-            [p0 resolve: error];  
-        } else {  
-            [p0 resolve: [Promise getError: ERR_FETCHFAILED  
-                               description: ERRM_FETCHFAILED]];  
-            }  
-        }];  
-    return p0;  
-}```
+	- (Promise*) getPO: (NSString*) objectID ofClass: (NSString*) class  
+	// Returns a Promise for an id of type class  
+	{  
+	    if (!class) return [Promise resolvedWith: nil]; // (1)  
+	    Promise* p0 = [Promise initWithName: @"getPO"]; // (2)  
+	    PFQuery *query = [PFQuery queryWithClassName: class];  
+	    [query getObjectInBackgroundWithId: objectID   
+	           block: ^(PFObject *object, NSError *error)  
+	    {  
+	        if (object) {  
+	            [p0 resolve: object];  
+	        } else if (error) {  
+	            [p0 resolve: error];  
+	        } else {  
+	            [p0 resolve: [Promise getError: ERR_FETCHFAILED  
+	                               description: ERRM_FETCHFAILED]];  
+	            }  
+	        }];  
+	    return p0;  
+	}
 
 1.	If a nil is passed for class, do not start a query. Return a Promise that is already resolved as “nil”.
 2.	Otherwise, create a Promise and proceed with an async task.
