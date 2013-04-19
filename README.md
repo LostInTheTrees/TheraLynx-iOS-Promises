@@ -31,25 +31,25 @@ The above describes the execution of a single Promise. To string together multip
 
 This code shows how any method that executes a block asynchronously can be turned into a “Promise”. PFObject and PFQuery are from the parse.com SDK. GetObjectInBackgroundWithId has no knowledge of  Promises, but it can now be called by any code that uses Promises. Giving a Promise a name helps with debugging.
 
-```- (Promise*) getPO: (NSString*) objectID ofClass: (NSString*) class  xyzzy  
-// Returns a Promise for an id of type class  
-{  
-    Promise* p0 = [Promise alloc] init]; // (1)  
-    P0.name = @"getPO"]; // (2)  
-    PFQuery *query = [PFQuery queryWithClassName: class];  
-    [query getObjectInBackgroundWithId: objectID  // (3)  
-    block: ^(PFObject *object, NSError *error) { // (5)  
-        if (object) {    
-            [p0 resolve: object]; // (6)  
-        } else if (error) {  
-            [p0 resolve: error]; // (7)  
-        } else {  
-            [p0 resolve: [Promise getError: ERR_FETCHFAILED  
-                               description: ERRM_FETCHFAILED]]; // (8)  
-        }  
-    }];  
-    return p0; // (4)  
-}```
+    - (Promise*) getPO: (NSString*) objectID ofClass: (NSString*) class  xyzzy  
+	// Returns a Promise for an id of type class  
+	{  
+    	Promise* p0 = [Promise alloc] init]; // (1)  
+    	P0.name = @"getPO"]; // (2)  
+    	PFQuery *query = [PFQuery queryWithClassName: class];  
+    	[query getObjectInBackgroundWithId: objectID  // (3)  
+    	block: ^(PFObject *object, NSError *error) { // (5)  
+        	if (object) {    
+            	[p0 resolve: object]; // (6)  
+        	} else if (error) {  
+            	[p0 resolve: error]; // (7)  
+        	} else {  
+            	[p0 resolve: [Promise getError: ERR_FETCHFAILED  
+                	               description: ERRM_FETCHFAILED]]; // (8)  
+        	}  
+    	}];  
+    	return p0; // (4)  
+	}
 
 1.	A Promise object is created.
 2.	Assign a name for debugging purposes. [Promise initWithName: @”name”] can do these in one step.
