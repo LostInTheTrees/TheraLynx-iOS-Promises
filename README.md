@@ -1,8 +1,6 @@
 # Promises for iOS
 ## Bob Carlson, TheraLynx LLC
 
----
-
 Promises are a method of controlling and understanding asynchrony. They originated in Javascript, but I have created an iOS version. So far, I am finding it to be a much better way to handle this problem. Promises allow for several valuable concepts.
 
 * A string of asynchronous tasks can be programmed in a way that looks linear on the page for easy understanding.
