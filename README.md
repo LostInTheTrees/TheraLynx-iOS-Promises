@@ -31,7 +31,7 @@ The above describes the execution of a single Promise. To string together multip
 
 This code shows how any method that executes a block asynchronously can be turned into a “Promise”. PFObject and PFQuery are from the parse.com SDK. GetObjectInBackgroundWithId has no knowledge of  Promises, but it can now be called by any code that uses Promises. Giving a Promise a name helps with debugging.
 
-```- (Promise*) getPO: (NSString*) objectID ofClass: (NSString*) class  
+```- (Promise*) getPO: (NSString*) objectID ofClass: (NSString*) class  xyzzy  
 // Returns a Promise for an id of type class  
 {  
     Promise* p0 = [Promise alloc] init]; // (1)  
