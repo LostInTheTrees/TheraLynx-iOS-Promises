@@ -144,3 +144,51 @@ It also turns out to be valuable to be able to create a Promise that resolves im
 1.	If a nil is passed for class, do not start a query. Return a Promise that is already resolved as “nil”.
 2.	Otherwise, create a Promise and proceed with an async task.
 
+## Promise Class Reference
+
+### Overview
+The Promise class provides a way to execute sequences of asynchronous blocks in a controlled manner. Each Promise object represents a promise to deliver a result object or an error object to a block at some future time. When the result or error is delivered to the Promise though its resolve method, the appropriate block is scheduled on a queue and run.
+
+### Tasks
+
+#### Creating Promises
+
+#### Debugging Promise Execution
+
+### Class Methods
+
+#### promiseWithName
+
+    + (Promise*) promiseWithName: (NSString*) name;
+
+##### Return Value
+
+Returns a Promise
+
+##### Discussion
+Equivalent to 
+	Promise* p = [[Promise alloc] init];
+	p.name = @”name”;
+
+#### resolvedWith
+    + (Promise*) resolvedWith: (id) result;
+
+##### Return Value
+
+Returns a Promise
+
+##### Discussion
+
+Creates a new Promise that will resolve immediately with the object passed as result. 
+
+#### resolvedWithError
+    + (Promise*) resolvedWithError: (NSInteger) code
+                       description: (NSString*) desc;
+
+##### Return Value
+
+Returns a Promise
+
+##### Discussion
+
+Creates a new Promise that will resolve immediately with an error object. The error object is created from the code and description passed using [Promise getError:description:]. When a Promise is resolved with this object, the error block will be run.
