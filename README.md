@@ -164,7 +164,8 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 Returns a Promise
 
 ###### Discussion
-Equivalent to 
+Equivalent to
+ 
 	Promise* p = [[Promise alloc] init];
 	p.name = @”name”;
 
