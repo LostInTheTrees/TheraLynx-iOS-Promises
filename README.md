@@ -171,7 +171,7 @@ Equivalent to
 	Promise* p = [[Promise alloc] init];
 	p.name = @”name”;
 
-======
+-----
 #### resolvedWith
     + (Promise*) resolvedWith: (id) result;
 
@@ -181,7 +181,7 @@ Returns a Promise
 ###### Discussion
 Creates a new Promise that will resolve immediately with the object passed as result. 
 
-.....
+-----
 #### resolvedWithError
     + (Promise*) resolvedWithError: (NSInteger) code
                        description: (NSString*) desc;
@@ -192,6 +192,7 @@ Returns a Promise
 ###### Discussion
 Creates a new Promise that will resolve immediately with an error object. The error object is created from the code and description passed using [Promise getError:description:]. When a Promise is resolved with this object, the error block will be run.
 
+-----
 #### getError
     + (NSError*) getError: (NSInteger) code
     	      description: (NSString*) desc;
@@ -204,6 +205,7 @@ Creates a new NSError that is created from the code and description passed. This
 
 ### Instance Methods
 
+-----
 #### debug
 	- (NSNumber*) debug;
 
@@ -213,6 +215,7 @@ Returns an NSNumber*
 ###### Discussion
 Returns the debug property value.
 
+-----
 #### setDebug
 	- (void) setDebug: (NSNumber*) debug;
 
@@ -222,6 +225,7 @@ None
 ###### Discussion
 Sets the debug level. Defaults to zero. Zero means no debugging output. Set via promise.debug = <number>.
 
+-----
 ###### description
 	- (NSString*) description;
 
@@ -231,6 +235,7 @@ Returns an NSString*
 ###### Discussion
 The string returned is a description of the full chain of Promises. The prev pointers are used to backtrack to the oldest Promise in the chain. The name property is used to identify each promise. The promise on who the method is called is identified with “*****”.
 
+-----
 #### name
 	- (NSString*) name;
 
@@ -240,6 +245,7 @@ Returns an NSString*
 ###### Discussion
 Returns an NSString that concatenates the basename with “.<generation>”. Generation is an internal property that consists of a number. Generation defaults to zero, but is incremented when Promises are strung together with then: and then:error:.
 
+-----
 #### setName
 	- (void) setName: (NSString*) name;
 
