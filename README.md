@@ -171,7 +171,7 @@ Equivalent to
 	Promise* p = [[Promise alloc] init];
 	p.name = @”name”;
 
------
+======
 #### resolvedWith
     + (Promise*) resolvedWith: (id) result;
 
@@ -181,6 +181,7 @@ Returns a Promise
 ###### Discussion
 Creates a new Promise that will resolve immediately with the object passed as result. 
 
+.....
 #### resolvedWithError
     + (Promise*) resolvedWithError: (NSInteger) code
                        description: (NSString*) desc;
