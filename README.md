@@ -334,15 +334,17 @@ Returns a new Promise.
 
 ##### Discussion
 	[promise then: successBlock];
+
 is equivalent to  
+
 	[promise then: successBlock error: nil];
 
 #### then: error:
 	- (Promise*) then: (id (^)(id result))      successBlock
     	        error: (id (^)(NSError* error)) errorBlock;
 
-#### Return Value
+###### Return Value
 Returns a Promise*
 
-#### Discussion
+###### Discussion
 Assigns success and error blocks to the promise. Creates a new dependent Promise. The dependent Promise is set as the value of next of the current Promise. The dependent Promise inherits the queue and name of the current Promise. The dependent Promise’s generation is set to the generation of the current Promise plus 1. Thus in a string of then blocks, if the first Promise is named xyzzy, the name property will return xyzzy.0 for the first Promise in the string, xyzzy.1 for the second, xyzzy.2 for the third and so on.
