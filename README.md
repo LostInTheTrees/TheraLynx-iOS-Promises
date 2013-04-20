@@ -157,7 +157,9 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 
 ### Class Methods
 
+-----
 #### promiseWithName
+
     + (Promise*) promiseWithName: (NSString*) name;
 
 ###### Return Value
@@ -165,10 +167,11 @@ Returns a Promise
 
 ###### Discussion
 Equivalent to
- 
+
 	Promise* p = [[Promise alloc] init];
 	p.name = @”name”;
 
+-----
 #### resolvedWith
     + (Promise*) resolvedWith: (id) result;
 
