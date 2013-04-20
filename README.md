@@ -160,10 +160,10 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 #### promiseWithName
     + (Promise*) promiseWithName: (NSString*) name;
 
-##### Return Value
+###### Return Value
 Returns a Promise
 
-##### Discussion
+###### Discussion
 Equivalent to 
 	Promise* p = [[Promise alloc] init];
 	p.name = @”name”;
@@ -171,27 +171,27 @@ Equivalent to
 #### resolvedWith
     + (Promise*) resolvedWith: (id) result;
 
-##### Return Value
+###### Return Value
 Returns a Promise
 
-##### Discussion
+###### Discussion
 Creates a new Promise that will resolve immediately with the object passed as result. 
 
 #### resolvedWithError
     + (Promise*) resolvedWithError: (NSInteger) code
                        description: (NSString*) desc;
 
-##### Return Value
+###### Return Value
 Returns a Promise
 
-##### Discussion
+###### Discussion
 Creates a new Promise that will resolve immediately with an error object. The error object is created from the code and description passed using [Promise getError:description:]. When a Promise is resolved with this object, the error block will be run.
 
 #### getError
     + (NSError*) getError: (NSInteger) code
     	      description: (NSString*) desc;
 
-##### Return Value
+###### Return Value
 Returns an NSError object
 
 #### Discussion
@@ -205,67 +205,67 @@ Creates a new NSError that is created from the code and description passed. This
 #### Return Value
 Returns an NSNumber* 
 
-##### Discussion
+###### Discussion
 Returns the debug property value.
 
 #### setDebug
 	- (void) setDebug: (NSNumber*) debug;
 
-##### Return Value
+###### Return Value
 None
 
-##### Discussion
+###### Discussion
 Sets the debug level. Defaults to zero. Zero means no debugging output. Set via promise.debug = <number>.
 
-##### description
+###### description
 	- (NSString*) description;
 
-##### Return Value
+###### Return Value
 Returns an NSString*
 
-##### Discussion
+###### Discussion
 The string returned is a description of the full chain of Promises. The prev pointers are used to backtrack to the oldest Promise in the chain. The name property is used to identify each promise. The promise on who the method is called is identified with “*****”.
 
 #### name
 	- (NSString*) name;
 
-##### Return Value
+###### Return Value
 Returns an NSString*
 
-##### Discussion
+###### Discussion
 Returns an NSString that concatenates the basename with “.<generation>”. Generation is an internal property that consists of a number. Generation defaults to zero, but is incremented when Promises are strung together with then: and then:error:.
 
 #### setName
 	- (void) setName: (NSString*) name;
 
-##### Return Value
+###### Return Value
 None
 
-##### Discussion
+###### Discussion
 Sets basename to name and generation to zero. Then: and then:error: may increment generation. Use promise.name = @”name”.
 
 #### next
 	- (Promise*) next;
 
-##### Return Value
+###### Return Value
 Returns the Promise that is waiting for this Promise.
 
-##### Discussion
+###### Discussion
 It is not common to read this property except in debugging situations.
 
 #### setNext
 	- (void) next: (Promise*) p;
 
-##### Return Value
+###### Return Value
 None
 
-##### Discussion
+###### Discussion
 The next pointer is set to point to another Promise. When the Success or Error blocks return an object, whatever Promise is “next” is resolved by the return object. The next pointer is usually set by then: or then:error:. It is rarely set explicitly.
 
 #### prev
 	- (Promise*) prev;
 
-##### Return Value
+###### Return Value
 The Promise referred to by the “prev” pointer.
 
 #### Discussion
@@ -274,44 +274,44 @@ The prev pointer is set as the reverse of the next pointer. It is ONLY set when 
 #### queue
 	- (dispatch_queue_t*) queue;
 
-##### Return Value
+###### Return Value
 Returns an NSString*
 
-##### Discussion
+###### Discussion
 The string returned is a description of the full chain of Promises. The prev pointers are used to backtrack to the oldest Promise in the chain.
 
 #### setQueue
 	- (void) setQueue: (dispatch_queue_t*) queue;
 
-##### Return Value
+###### Return Value
 None
 
-##### Discussion
+###### Discussion
 Sets the dispatch queue to use for the success and error blocks.
 
 #### reject:description:
 	- (void) reject: (NSInteger) code
 	    description: (NSString*) desc;
 
-##### Return Value
+###### Return Value
 None
 
-##### Discussion
+###### Discussion
 Resolves this Promise with an error constructed from the code and description passed.
 
 #### resolve
 	- (void) resolve: (id) result;
 
-##### Return Value
+###### Return Value
 None
 
-##### Discussion
+###### Discussion
 Resolves this Promise. If the result object is an NSError, the Error block is scheduled and run. If there is no Error block, but there is a Next Promise, the Next Promise is resolved with the error. If there is no Error block and Next is nil, then assert(NO). If the result is not an NSError, then the Success block is scheduled and run.
 
 #### prev
 	- (Promise*) prev;
 
-##### Return Value
+###### Return Value
 The Promise referred to by the “prev” pointer.
 
 ##### Discussion
@@ -320,19 +320,19 @@ The prev pointer is set as the reverse of the next pointer. It is ONLY set when 
 #### runOnMainQueue
 	- (void) runOnMainQueue;
 
-##### Return Value
+###### Return Value
 None
 
-##### Discussion
+###### Discussion
 Sets the queue of this Promise to the Main queue. Any blocks scheduled by this promise will be scheduled on the Main queue.
 
 #### then:
 	- (Promise*) then: (id (^)(id result)) successBlock;
 
-##### Return Value
+###### Return Value
 Returns a new Promise.
 
-##### Discussion
+###### Discussion
 	[promise then: successBlock];
 
 is equivalent to  
