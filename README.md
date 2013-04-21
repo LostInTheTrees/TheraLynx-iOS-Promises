@@ -115,7 +115,7 @@ The code above might be a string of asynchronous tasks that are required to comp
 3.	Assign a Success block and an Error block for this task. [p0 then:…] returns a Promise, but this is discarded because these blocks do not start any asynchronous tasks. 
 4.	The string of async tasks ends here and rejoins the Main queue.
 5.	Nil is returned because these blocks do not promise any results.
- 
+
 ### Pre-Resolved Promises
 
 It also turns out to be valuable to be able to create a Promise that resolves immediately. Consider getPO again, which encapsulates an asynchronous task. It’s possible that getPO might determine that an async task is not needed. However, it must return a Promise. The answer is to return a Promise that is “already resolved”. As soon as a Success block is assigned to that Promise, the promise is resolved and the Success (or Error) block is scheduled and run.
@@ -144,7 +144,44 @@ It also turns out to be valuable to be able to create a Promise that resolves im
 1.	If a nil is passed for class, do not start a query. Return a Promise that is already resolved as “nil”.
 2.	Otherwise, create a Promise and proceed with an async task.
 
-## Promise Class Reference
+### Executing a block in the background
+
+You may want to execute a block the background to begin a sequence of asynchronous tasks. Just create a Promise with a Success block and then resolve the Promise when you are ready to kick off the sequence.
+
+	- (Promise*) doSomethingInForeground: (id) someArgument  
+	{  
+		Promise* p0 = [Promise promiseWithName: @"start in BG"]; // (1)
+		Promise* p1 = [p0 then:^id(id result) { // (2)  
+	        // Ignore the result (6)
+	        // Do stuff here in the BG  
+	        return [self getThing3: someArgument]; // (7)  
+	    }];  
+
+	    [p1 runOnMainQueue]; // (3)  
+	    [p1 then:^id(id ressult) { // (4)  
+	        TObject *typedObj = (TObject*) result; // (8)  
+	        // Do stuff here on Main queue, including UI, VCs etc.  
+	        return nil; // (8)  
+	    } error:^id(NSError error) {  
+	        // Log the error  
+	        return nil; // (9)
+	    }];  
+	    [p0 resolve: nil]; // (5)
+	}
+
+1.	Create a Promise to hold the initial background block.
+2.	Assign the initial background block. P1 is a Promise waiting for the p0 blcok to resolve it.
+3.	Run the p1 block back on the main queue when it runs.
+4.	Assign the p1 block.
+5.	Kick off the p0 block in the background. It will run in the background sometime after we exit doSomethingInForeground.
+6. 	When this block runs, the result is ignored because there is no need to pass in an object.
+7.	The p0 block returns a Promise, so p1 is now waiting for that Promise. When it returns a resolution, the p1 blcok will be run.
+8.	The p1 block now runs in the foreground.
+9.	Returns nil. There is no dependent Promise, so the async sequence ends.
+
+***
+
+# Promise Class Reference
 
 ### Overview
 The Promise class provides a way to execute sequences of asynchronous blocks in a controlled manner. Each Promise object represents a promise to deliver a result object or an error object to a block at some future time. When the result or error is delivered to the Promise though its resolve method, the appropriate block is scheduled on a queue and run.
@@ -152,12 +189,43 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 ### Tasks
 
 #### Creating Promises
+    + (Promise*)   promiseWithName: (NSString*) name;
+    + (Promise*)      resolvedWith: (id)        result;
+    + (Promise*) resolvedWithError: (NSInteger) code
+                       description: (NSString*) desc;
 
-#### Debugging Promise Execution
+#### Adding Blocks
+	- (Promise*) then: (id (^)(id result))      successBlock;
+	- (Promise*) then: (id (^)(id result))      successBlock
+    	        error: (id (^)(NSError* error)) errorBlock;
+
+#### Resolving Promises
+    + (Promise*)      resolvedWith: (id)        result;
+    + (Promise*) resolvedWithError: (NSInteger) code
+                       description: (NSString*) desc;
+    + (NSError*)          getError: (NSInteger) code
+    	               description: (NSString*) desc; 
+
+#### Scheduling
+	- (Promise*)       next;
+	- (void)        setNext: (Promise*) p;
+	- (Promise*)       prev;	
+	
+	- (void) runOnMainQueue;
+	- (void) runDefault;
+	- (void) runLowPriority;
+	- (void) runHighPriority;
+
+#### Debugging
+	- (NSNumber*) debug;    	      
+	- (void)   setDebug: (NSNumber*) debug;
+	- (NSString*)  name;
+	- (void)    setName: (NSString*) name;
+
+*****
 
 ### Class Methods
 
------
 #### promiseWithName
 
     + (Promise*) promiseWithName: (NSString*) name;
@@ -171,7 +239,8 @@ Equivalent to
 	Promise* p = [[Promise alloc] init];
 	p.name = @”name”;
 
------
+***
+
 #### resolvedWith
     + (Promise*) resolvedWith: (id) result;
 
@@ -181,7 +250,8 @@ Returns a Promise
 ###### Discussion
 Creates a new Promise that will resolve immediately with the object passed as result. 
 
------
+***
+
 #### resolvedWithError
     + (Promise*) resolvedWithError: (NSInteger) code
                        description: (NSString*) desc;
@@ -192,7 +262,8 @@ Returns a Promise
 ###### Discussion
 Creates a new Promise that will resolve immediately with an error object. The error object is created from the code and description passed using [Promise getError:description:]. When a Promise is resolved with this object, the error block will be run.
 
------
+***
+
 #### getError
     + (NSError*) getError: (NSInteger) code
     	      description: (NSString*) desc;
@@ -203,9 +274,10 @@ Returns an NSError object
 #### Discussion
 Creates a new NSError that is created from the code and description passed. This can be used to resolve a Promise with an error when it is appropriate to call [promise resolve:…].
 
+***
+
 ### Instance Methods
 
------
 #### debug
 	- (NSNumber*) debug;
 
@@ -215,7 +287,8 @@ Returns an NSNumber*
 ###### Discussion
 Returns the debug property value.
 
------
+***
+
 #### setDebug
 	- (void) setDebug: (NSNumber*) debug;
 
@@ -225,7 +298,8 @@ None
 ###### Discussion
 Sets the debug level. Defaults to zero. Zero means no debugging output. Set via promise.debug = <number>.
 
------
+***
+
 ###### description
 	- (NSString*) description;
 
@@ -235,7 +309,8 @@ Returns an NSString*
 ###### Discussion
 The string returned is a description of the full chain of Promises. The prev pointers are used to backtrack to the oldest Promise in the chain. The name property is used to identify each promise. The promise on who the method is called is identified with “*****”.
 
------
+***
+
 #### name
 	- (NSString*) name;
 
@@ -245,7 +320,8 @@ Returns an NSString*
 ###### Discussion
 Returns an NSString that concatenates the basename with “.<generation>”. Generation is an internal property that consists of a number. Generation defaults to zero, but is incremented when Promises are strung together with then: and then:error:.
 
------
+***
+
 #### setName
 	- (void) setName: (NSString*) name;
 
@@ -254,6 +330,8 @@ None
 
 ###### Discussion
 Sets basename to name and generation to zero. Then: and then:error: may increment generation. Use promise.name = @”name”.
+
+***
 
 #### next
 	- (Promise*) next;
@@ -264,14 +342,18 @@ Returns the Promise that is waiting for this Promise.
 ###### Discussion
 It is not common to read this property except in debugging situations.
 
+***
+
 #### setNext
-	- (void) next: (Promise*) p;
+	- (void) setNext: (Promise*) p;
 
 ###### Return Value
 None
 
 ###### Discussion
 The next pointer is set to point to another Promise. When the Success or Error blocks return an object, whatever Promise is “next” is resolved by the return object. The next pointer is usually set by then: or then:error:. It is rarely set explicitly.
+
+***
 
 #### prev
 	- (Promise*) prev;
@@ -282,6 +364,8 @@ The Promise referred to by the “prev” pointer.
 #### Discussion
 The prev pointer is set as the reverse of the next pointer. It is ONLY set when a next pointer is set. After [p1 setNext: p2], p1.next == p2 and p2.prev == p1. User for debugging only.
 
+***
+
 #### queue
 	- (dispatch_queue_t*) queue;
 
@@ -291,6 +375,8 @@ Returns an NSString*
 ###### Discussion
 The string returned is a description of the full chain of Promises. The prev pointers are used to backtrack to the oldest Promise in the chain.
 
+***
+
 #### setQueue
 	- (void) setQueue: (dispatch_queue_t*) queue;
 
@@ -299,6 +385,8 @@ None
 
 ###### Discussion
 Sets the dispatch queue to use for the success and error blocks.
+
+***
 
 #### reject:description:
 	- (void) reject: (NSInteger) code
@@ -310,6 +398,8 @@ None
 ###### Discussion
 Resolves this Promise with an error constructed from the code and description passed.
 
+***
+
 #### resolve
 	- (void) resolve: (id) result;
 
@@ -318,6 +408,8 @@ None
 
 ###### Discussion
 Resolves this Promise. If the result object is an NSError, the Error block is scheduled and run. If there is no Error block, but there is a Next Promise, the Next Promise is resolved with the error. If there is no Error block and Next is nil, then assert(NO). If the result is not an NSError, then the Success block is scheduled and run.
+
+***
 
 #### prev
 	- (Promise*) prev;
@@ -328,6 +420,8 @@ The Promise referred to by the “prev” pointer.
 ##### Discussion
 The prev pointer is set as the reverse of the next pointer. It is ONLY set when a next pointer is set. After [p1 setNext: p2], p1.next == p2 and p2.prev == p1. User for debugging only.
 
+***
+
 #### runOnMainQueue
 	- (void) runOnMainQueue;
 
@@ -336,6 +430,41 @@ None
 
 ###### Discussion
 Sets the queue of this Promise to the Main queue. Any blocks scheduled by this promise will be scheduled on the Main queue.
+
+***
+
+#### runDefault
+	- (void) runDefault;
+
+###### Return Value
+None
+
+###### Discussion
+Sets the queue of this Promise to the Default Priority Global Queue. This is the usual default.
+
+***
+
+#### runHighPriority
+	- (void) runHighPriority;
+
+###### Return Value
+None
+
+###### Discussion
+Sets the queue of this Promise to the High Priority Global Queue.
+
+***
+
+#### runLowPriority
+	- (void) runLowPriority;
+
+###### Return Value
+None
+
+###### Discussion
+Sets the queue of this Promise to the Low Priority Global Queue.
+
+***
 
 #### then:
 	- (Promise*) then: (id (^)(id result)) successBlock;
@@ -349,6 +478,8 @@ Returns a new Promise.
 is equivalent to  
 
 	[promise then: successBlock error: nil];
+
+***
 
 #### then: error:
 	- (Promise*) then: (id (^)(id result))      successBlock
