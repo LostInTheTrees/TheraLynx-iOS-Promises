@@ -7,7 +7,7 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 ### Tasks
 
 #### Creating Promises
-    + (Promise*)   promiseWithName: (NSString*) name;
+    + (Promise*)   [promiseWithName][promiseWithName]: (NSString*) name;
     + (Promise*)      resolvedWith: (id)        result;
     + (Promise*) resolvedWithError: (NSInteger) code
                        description: (NSString*) desc;
@@ -44,7 +44,7 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 
 ### Class Methods
 
-#### promiseWithName
+#### promiseWithName [promiseWithName]
 
     + (Promise*) promiseWithName: (NSString*) name;
 

@@ -9,7 +9,7 @@ Promises are a method of controlling and understanding asynchrony. They originat
 * Errors that occur in any part of the asynchronous chain can be caught at any point or automatically passed down the chain.
 * Any existing method call that asynchronously executes a block can be easily encapsulated in a method that returns a Promise.
 
-I found that the screencasts by Mike Taulty on JS Promises to be an excellent introduction, even though the environment and some names are different. However, I will still attempt an introduction here. 
+I found that the [screencasts by Mike Taulty] (http://mtaulty.com/CommunityServer/blogs/mike_taultys_blog/archive/2012/04/11/winjs-promises-1.aspx) on JS Promises to be an excellent introduction, even though the environment and some names are different. However, I will still attempt an introduction here. 
 
 A Promise should be thought of as a promise to return a result object (id) or an error object (NSError) to a block at a future time. A Promise object is created to represent the asynchronous result. The asynchronous code delivers the result to the Promise and then the Promise schedules and runs a block to handle the result or error. The basic sequence for using promises is as follows.
 
