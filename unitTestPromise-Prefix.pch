@@ -1,0 +1,11 @@
+//
+// Prefix header for all source files of the 'unitTestPromise' target in the 'unitTestPromise' project
+//
+
+#ifdef __OBJC__
+    #import <UIKit/UIKit.h>
+    #import <Foundation/Foundation.h>
+
+    #define UNITTEST
+    #import "definesOpen.h"
+#endif
