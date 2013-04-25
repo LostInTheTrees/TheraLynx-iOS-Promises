@@ -21,17 +21,56 @@
 
 @interface Promise ()
 
-@property (readwrite,         nonatomic) NSInteger ptype; // 0 - normal, 1 - pre-triggered
+@property (readwrite,         nonatomic) NSInteger resolutionType;
+#define RTVIRGIN      0 // No resolution determined yet
+#define RTBLOCKS      1 // Block(s) attached
+#define RTPASSTHROUGH 2 // Returned, result passes through to Next
+#define RTAGGREGATED  3 // Result is delivered to an aggregate Promise in Next
+#define RTAFTER       4 // An aggregate, triggers when all Promises are complete
+
+@property (readwrite,         nonatomic) BOOL      alreadyResolved;
+@property (readwrite,         nonatomic) BOOL      aggregated;
 @property (readwrite,         nonatomic) NSInteger generation; // Debug modifier for name
 @property (readwrite, strong, nonatomic) id        result;
 @property (readwrite, strong, nonatomic) id      (^successBlock) (id       result);
 @property (readwrite, strong, nonatomic) id      (^errorBlock)   (NSError* error);
+@property (readwrite, strong, nonatomic) id      (^afterBlock)   (NSMutableDictionary* results);
+
+@property (readwrite, strong, nonatomic) NSMutableDictionary*  dictOfResults;
+@property (readwrite,         nonatomic) NSInteger aggregationIndex;
+// The aggregationIndex indicates that when non-zero this promise is aggregated
 
 @end
 
 @implementation Promise {
     NSString* _name;
     int       _generation;
+}
+
+#ifdef UNITTEST
+/*******************************************************************
+ Sets a Unit Testing delegate for all Promises
+ *******************************************************************/
++ (id) utDelegate: (id) delegate
+{
+    static id _utDelegate;
+    if (delegate) {
+        _utDelegate = delegate;
+        return nil;
+    } else {
+        return _utDelegate;
+    }
+}
+#endif
+
+/*******************************************************************
+ promiseWithName creates a new Promise with the name property set
+ *******************************************************************/
++ (Promise*) promiseWithName: (NSString*) name
+{
+    Promise* p = [[Promise alloc] init];
+    p.name = name;
+    return p;
 }
 
 /*******************************************************************
@@ -41,7 +80,7 @@
 + (Promise*) resolvedWith: (id) result
 {
     Promise* p = [[Promise alloc] init];
-    p.ptype = 1;
+    p.alreadyResolved = YES;
     p.result = result;
     return p;
 }
@@ -81,20 +120,27 @@
                                   userInfo: @{ NSLocalizedDescriptionKey : NSLocalizedString(desc, nil)}];
 }
 
-+ (Promise*) promiseWithName: (NSString*) name
-{
-    Promise* p = [[Promise alloc] init];
-    p.name = name;
-    return p;
-}
-
 - (Promise*) init
 {
     assert( (self = [super init]) );
-    if (_debug) [QLOG(@"")];
+#ifdef UNITTEST
+    if ([Promise utDelegate: nil]) [[Promise utDelegate: nil] allocation];
+#endif
+    if (_debug) QNSLOG(@"");
     self.queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
     self.name = @"-";
+    self.resolutionType = RTVIRGIN;
+    self.alreadyResolved = NO;
     return self;
+}
+
+- (void) dealloc
+{
+    if (_debug>1) QNSLOG(@"%@", self.name);
+    
+#ifdef UNITTEST
+    if ([Promise utDelegate: nil]) [[Promise utDelegate: nil] deallocation];
+#endif
 }
 
 - (void) setName: (NSString*) name
@@ -111,22 +157,30 @@
 - (NSString*) describeChain: (id) start
 {
     NSString* d = self.name;
+    if (_resolutionType == RTVIRGIN) d = [d stringByAppendingFormat: @" VIRGIN"];
+    if (_resolutionType == RTBLOCKS) d = [d stringByAppendingFormat: @" BLOCKS"];
+    if (_resolutionType == RTPASSTHROUGH) d = [d stringByAppendingFormat: @" PASSTHROUGH"];
+    if (_resolutionType == RTAGGREGATED) d = [d stringByAppendingFormat: @" AGGREGATED"];
+    if (_resolutionType == RTAFTER) d = [d stringByAppendingFormat: @" AFTER"];
     if (_successBlock) d = [d stringByAppendingFormat: @" (then)"];
     if (_errorBlock) d = [d stringByAppendingFormat: @" (error)"];
     if ([self willRunOnMainQueue]) d = [d stringByAppendingFormat: @" (main)"];
     if (start == self) d = [d stringByAppendingFormat: @" *****"];
-    if (self.next) d= [NSString stringWithFormat: @"%@ ->\n%@", d, self.next.description];
+    if (self.next) d= [NSString stringWithFormat: @"%@ ->\n%@", d, [self.next describeChain: start]];
+    //QNSLOG(@"%@", d);
     return d;
 }
 
 - (NSString*) description: (id) start
 {
+    //QNSLOG(@"%@ prev %@ next %@", self.name, self.prev.name, self.next.name);
     if (self.prev) return [self.prev description: start];
     else return [self describeChain: start];
 }
 
 - (NSString*) description
 {
+    //QNSLOG(@"%@", self.name);
     return [self description: self];
 }
 
@@ -138,7 +192,7 @@
  *******************************************************************/
 - (void) runOnMainQueue
 {
-    if (_debug>1) [QLOG(@"%@"), self.name];
+    if (_debug>1) QNSLOG(@"%@", self.name);
     self.queue = dispatch_get_main_queue();
 }
 
@@ -149,25 +203,20 @@
 
 - (void) runDefault
 {
-    if (_debug>1) [QLOG(@"%@"), self.name];
+    if (_debug>1) QNSLOG(@"%@", self.name);
     self.queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
 }
 
 - (void) runLowPriority
 {
-    if (_debug>1) [QLOG(@"%@"), self.name];
+    if (_debug>1) QNSLOG(@"%@", self.name);
     self.queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0);
 }
 
 - (void) runHighPriority
 {
-    if (_debug>1) [QLOG(@"%@"), self.name];
+    if (_debug>1) QNSLOG(@"%@", self.name);
     self.queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
-}
-
-- (void) dealloc
-{
-    if (_debug>1) [QLOG(@"%@"), self.name];
 }
 
 /*******************************************************************
@@ -177,10 +226,10 @@
  *******************************************************************/
 - (void) setNext: (Promise*) next
 {
-    if (_debug>1) [QLOG(@"Set Next\n%@"), self.description];
+    if (_debug>1) QNSLOG(@"Set Next %@ -> %@\n%@", self.name, _next.name, self.description);
     _next = next;
     next.prev = self;
-    if (_ptype == 1) [self resolve: self.result];
+    if (_alreadyResolved && self.resolutionType == RTPASSTHROUGH) [self resolve: self.result];
 }
 
 /*******************************************************************
@@ -195,14 +244,11 @@
 - (void) resolve: (id) result
 {
     BOOL success;
+    BOOL after;
     
-    if (_debug) [QLOG(@"%@"), self.name];
-    if (_ptype == 2) {
-        [_next resolve: result];
-        return;
-    }
+    if (_debug) QNSLOG(@"%@ %d", self.name, self.resolutionType);
     if ([result isKindOfClass: [Promise class]]) {
-        if (_debug>1) [QLOG(@"%@ Resolved with a new Promise"), self.name];
+        if (_debug>1) QNSLOG(@"%@ Resolved with a new Promise", self.name);
         Promise* promise = (Promise*) result;
         promise.next = self.next;
         // Whatever Promise is waiting for this one (self.next) will
@@ -211,35 +257,58 @@
         // The job has been turned over to the new Promise.
         return;
     }
-    success = ![result isKindOfClass: [NSError class]];
-    if (success) {
-        // Success
-        if (_successBlock == nil) {
-            if (_next != nil) [_next resolve: result];
-            return;
-        }
+    if (_resolutionType == RTPASSTHROUGH) {
+        [_next resolve: result];
+        return;
+    } else if (_resolutionType == RTVIRGIN) {
+        _alreadyResolved = YES;
+        _result = result;
+        return;
+    } else if (_resolutionType == RTAGGREGATED) {
+        [self.next aggregateResult: result
+                         withIndex: _aggregationIndex];
+        return;
+    }
+    
+    // Going to resolve here,
+    if (_resolutionType == RTAFTER) {
+        // This is an aggregate Promise
+        success = NO;
+        after = YES;
     } else {
-        // Error
-        if (_errorBlock == nil) {
-            if (_next != nil) [_next resolve: result];
-            else assert(NO); // Errors must be handled, at least during development
-            return;
+        after = NO;
+        success = ![result isKindOfClass: [NSError class]];
+        if (success) {
+            // Success
+            assert(_successBlock);
+        } else {
+            // Error
+            if (_errorBlock == nil) {
+                assert(_next);
+                [_next resolve: result];
+                return;
+            }
         }
     }
     dispatch_async(self.queue, ^(void) {
         id newReturn;
-        if (success) {
-            if (_debug>1) [QLOG(@"%@ Success Block"), self.name];
+
+        // Call a block and get a return object
+        if (after) {
+            if (_debug>1) QNSLOG(@"%@ After Block", self.name);
+            newReturn = _afterBlock(self.dictOfResults);
+        } else if (success) {
+            if (_debug>1) QNSLOG(@"%@ Success Block", self.name);
             newReturn = _successBlock(result);
         } else {
-            if (_debug>1) [QLOG(@"%@ Error Block"), self.name];
+            if (_debug>1) QNSLOG(@"%@ Error Block", self.name);
             newReturn = _errorBlock((NSError*) result);
         }
-        // Promise?
+        // Is the return a Promise?
         if ([newReturn isKindOfClass: [Promise class]]) {
-            if (_debug>1) [QLOG(@"%@ New Promise returned"), self.name];
+            if (_debug>1) QNSLOG(@"%@ New Promise returned", self.name);
             Promise* promise = (Promise*) newReturn;
-            promise.ptype = 2;
+            promise.resolutionType = RTPASSTHROUGH;
             promise.next = self.next;
             // Whatever Promise is waiting for this one (self.next) will
             // be triggered by the new promise when it is resolved.
@@ -248,8 +317,15 @@
             return;
         }
         // It's a result or an error
-        if (_debug>1) [QLOG(@"%@ Resolving Next"), self.name];
-        [self.next resolve: newReturn];
+        if (self.debug>1) QNSLOG(@"%@ Resolving Next", self.name);
+        if (self.next) {
+            [self.next resolve: newReturn];
+        } else {
+            // This in case the "next" Promise is not set until after the resolution blocks have returned
+            self.result = newReturn;
+            self.alreadyResolved = YES;
+            self.resolutionType = RTPASSTHROUGH;
+        }
     });
 }
 
@@ -259,7 +335,7 @@
 - (void)  reject: (NSInteger) code
      description: (NSString*) desc
 {
-    if (_debug) [QLOG(@"%@"), self.name];
+    if (_debug) QNSLOG(@"%@", self.name);
     [self resolve: [Promise resolvedWith: [Promise getError: code
                                                   description: desc]]];
 }
@@ -268,12 +344,13 @@
  Attach success and error blocks to an existing promise.
  Create a new Promise that will be fulfilled by these blocks.
  The new Promise is set to run on the same queue as this Promise.
- The user can cahnge that after the new Promise is recieved.
+ The user can change that after the new Promise is received.
  *******************************************************************/
-- (Promise*) then: (id (^)(id        result)) successBlock
+- (Promise*) then:  (id (^)(id        result)) successBlock
              error: (id (^)(NSError*  error))  errorBlock
 {
-    if (_debug) [QLOG(@"%@"), self.name];
+    if (_debug) QNSLOG(@"%@", self.name);
+    self.resolutionType = RTBLOCKS;
     self.successBlock = successBlock;
     self.errorBlock = errorBlock;
     Promise* p = [[Promise alloc] init];
@@ -281,7 +358,8 @@
     p.debug = self.debug;
     p.name = _name;
     p.generation = self.generation + 1;
-    self.next = p;
+    self.next = p; // Must be last
+    if (_result) [self resolve: _result];
     return p;
 }
 
@@ -293,4 +371,72 @@
     return [self then: successBlock
                 error: nil];
 }
+
+/*******************************************************************
+ after creates a promise that is resolved when all promises in the
+ arrayOfPromises are resolved. None of these promises should already
+ have Success and/or Error blocks attached. In any case they will
+ not be called.
+ 
+ When an "all" Promise is resolved, the result passed to its
+ block is a disctionary of result objects that matches the array
+ of Promises. The result from the second Promise in the array is
+ found at [results objectForKey: @(2)].
+ *******************************************************************/
+- (Promise*) after: (NSArray*)                             arrayOfPromises
+                do: (id (^)(NSMutableDictionary* results)) block
+{
+    int i = 0;
+    
+    self.resolutionType = RTAFTER;
+    self.afterBlock = block;
+    self.dictOfResults = [NSMutableDictionary new];
+    // Prep the aggregated Promises
+    for (Promise* p in arrayOfPromises) {
+        i++;
+        [_dictOfResults setObject: [Promise class] // used as a unique marker
+                           forKey: @(i)];
+        p.resolutionType = RTAGGREGATED;
+        p.next = self;
+        p.aggregationIndex = i;
+    }
+    if (self.debug>1) QNSLOG(@"\n%@\n%@", [self description], [_dictOfResults description]);
+
+    // Prep the dependent Promise
+    Promise* p0 = [[Promise alloc] init];
+    p0.queue = self.queue;
+    p0.debug = self.debug;
+    p0.name = _name;
+    p0.generation = self.generation + 1;
+    self.next = p0; // Must be last
+    return p0;
+}
+
+/*******************************************************************
+ aggregate
+ *******************************************************************/
+- (void) aggregateResult: (id) result
+               withIndex: (NSInteger) index
+{
+    @synchronized(self) {
+        if (self.debug) QNSLOG(@"%@ %d %d", self.name, index, self.resolutionType);
+        if (result) {
+            [_dictOfResults setObject: result
+                               forKey: @(index)];
+        } else {
+            [_dictOfResults setObject: [NSNull null]
+                               forKey: @(index)];
+        }
+        for (id key in [_dictOfResults allKeys]) {
+            id obj = [_dictOfResults objectForKey: key];
+            if (obj == [Promise class]) {
+                // One of our markers is still present, don't resolve the "after" yet
+                return;
+            }
+        }
+        if (self.debug>1) QNSLOG(@"%@ %d Ready", self.name, index);
+        [self resolve: self.dictOfResults];
+    }
+}
+
 @end

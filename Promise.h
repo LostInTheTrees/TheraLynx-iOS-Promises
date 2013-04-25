@@ -17,8 +17,9 @@
  "Bob Carlson, TheraLynx LLC".
  *******************************************************************/
 #import <Foundation/Foundation.h>
-#import "QLog.h"
-
+#ifdef UNITTEST
+    #import "UnitTest.h"
+#endif
 @interface Promise : NSObject
 
 @property (readwrite, strong, nonatomic) Promise*         next;
@@ -26,7 +27,6 @@
 @property (readwrite, strong, nonatomic) dispatch_queue_t queue;
 @property (readwrite,         nonatomic) NSInteger        debug;
 @property (readwrite, strong, nonatomic) NSString*        name;
-
 
 /*******************************************************************
  promiseWithName creates a new Promise with the name property set 
@@ -47,6 +47,13 @@
  *******************************************************************/
 + (NSError*)          getError: (NSInteger) code
                    description: (NSString*) desc;
+
+#ifdef UNITTEST
+/*******************************************************************
+ Sets a Unit Testing delegate for all Promises
+ *******************************************************************/
++ (id) utDelegate: (id) delegate;
+#endif
 
 /*******************************************************************
  Resolve triggers a Promise with the result object
@@ -75,6 +82,25 @@
 
 - (Promise*) then: (id (^)(id result))      successBlock
             error: (id (^)(NSError* error)) errorBlock;
+
+/*******************************************************************
+ after creates a promise that is resolved when all promises in the
+ arrayOfPromises are resolved. None of these promises should already
+ have Success and/or Error blocks attached. In any case they will
+ not be called.
+ 
+ When an "all" Promise is resolved, the result passed to its
+ block is a disctionary of result objects that matches the array
+ of Promises. The result from the second Promise in the array is
+ found at [results objectForKey: @(2)].
+ 
+ Note that if an "after" promise is returned from a SUccess or Error
+ block, it becomes a pass-through Promise and the receiving Success 
+ block must be prepared for an NSMutableDictionary like the "do" 
+ block.
+ *******************************************************************/
+- (Promise*) after: (NSArray*)                             arrayOfPromises
+                do: (id (^)(NSMutableDictionary* results)) block;
 
 /*******************************************************************
  These methods cause the blocks to run on the specified global queues.
