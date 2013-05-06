@@ -1,5 +1,5 @@
 /*******************************************************************
- iOS Promises
+ iOS Promises - Version 1.01
  
  Promise.m
  
@@ -18,6 +18,7 @@
  *******************************************************************/
 
 #import "Promise.h"
+#import "UnitTest.h"
 
 @interface Promise ()
 
@@ -27,16 +28,25 @@
 #define RTPASSTHROUGH 2 // Returned, result passes through to Next
 #define RTAGGREGATED  3 // Result is delivered to an aggregate Promise in Next
 #define RTAFTER       4 // An aggregate, triggers when all Promises are complete
+#define RTCANCELLED   5 // This Promise has been cancelled
 
 @property (readwrite,         nonatomic) BOOL      alreadyResolved;
 @property (readwrite,         nonatomic) BOOL      aggregated;
 @property (readwrite,         nonatomic) NSInteger generation; // Debug modifier for name
 @property (readwrite, strong, nonatomic) id        result;
+
 @property (readwrite, strong, nonatomic) id      (^successBlock) (id       result);
 @property (readwrite, strong, nonatomic) id      (^errorBlock)   (NSError* error);
-@property (readwrite, strong, nonatomic) id      (^afterBlock)   (NSMutableDictionary* results);
+
+@property (readwrite, strong, nonatomic) id      (^afterBlock)      (NSMutableDictionary* results);
+@property (readwrite, strong, nonatomic) id      (^afterErrorBlock) (NSMutableDictionary* results);
+
+@property (readwrite, strong, nonatomic) void    (^cancelBlock) ();
 
 @property (readwrite, strong, nonatomic) NSMutableDictionary*  dictOfResults;
+@property (readwrite, strong, nonatomic) NSMutableDictionary*  dictOfPromises;
+// dictOfPromises functions as the "prev" pointer for "after" Promises
+
 @property (readwrite,         nonatomic) NSInteger aggregationIndex;
 // The aggregationIndex indicates that when non-zero this promise is aggregated
 
@@ -51,9 +61,9 @@
 /*******************************************************************
  Sets a Unit Testing delegate for all Promises
  *******************************************************************/
-+ (id) utDelegate: (id) delegate
++ (id <UnitTest>) utDelegate: (id) delegate
 {
-    static id _utDelegate;
+    static id <UnitTest> _utDelegate;
     if (delegate) {
         _utDelegate = delegate;
         return nil;
@@ -124,7 +134,8 @@
 {
     assert( (self = [super init]) );
 #ifdef UNITTEST
-    if ([Promise utDelegate: nil]) [[Promise utDelegate: nil] allocation];
+    id <UnitTest> ut = [Promise utDelegate: nil];
+    if (ut) [ut allocation];
 #endif
     if (_debug) QNSLOG(@"");
     self.queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
@@ -139,7 +150,8 @@
     if (_debug>1) QNSLOG(@"%@", self.name);
     
 #ifdef UNITTEST
-    if ([Promise utDelegate: nil]) [[Promise utDelegate: nil] deallocation];
+    id <UnitTest> ut = [Promise utDelegate: nil];
+    if (ut) [ut deallocation];
 #endif
 }
 
@@ -257,7 +269,9 @@
         // The job has been turned over to the new Promise.
         return;
     }
-    if (_resolutionType == RTPASSTHROUGH) {
+    if (_resolutionType == RTCANCELLED) {
+        return;
+    } else if (_resolutionType == RTPASSTHROUGH) {
         [_next resolve: result];
         return;
     } else if (_resolutionType == RTVIRGIN) {
@@ -341,6 +355,66 @@
 }
 
 /*******************************************************************
+ Cancel
+ *******************************************************************/
+- (void) cancel
+{
+    if (_debug>1) {
+        QNSLOG(@"%@  prev %@  next %@", self.name, self.prev.name, self.next.name);
+    } else if (_debug) {
+        QNSLOG(@"%@", self.name);
+    }
+
+    Promise* dependent = _next;
+    
+    // Now cancel this promise and all of its predecessors
+    [self performCancel];
+    if (dependent) {
+        // If this Promise has dependents,send an error to them
+        NSDictionary* desc = @{ NSLocalizedDescriptionKey : NSLocalizedString(@"Promise cancelled", nil)};
+        NSError* err = [[NSError alloc] initWithDomain: @"Promise"
+                                                  code: 9999
+                                              userInfo: desc];
+        [dependent resolve: err];
+    }
+}
+
+- (void) performCancel
+{
+    if (_debug) {
+        QNSLOG(@"%@ %@", self.name, [_dictOfPromises description]);
+    }
+    Promise* predecessor = _prev;
+    _resolutionType = RTCANCELLED;
+    if (_cancelBlock) _cancelBlock(); // Run the Cancel Block
+    _cancelBlock = nil;
+    _next = nil;
+    _prev = nil;
+    _successBlock = nil;
+    _errorBlock = nil;
+    _afterBlock = nil;
+    _afterErrorBlock = nil;
+    _dictOfResults = nil;
+    if (_dictOfPromises) {
+        if (_debug>1) {
+            QNSLOG(@"%@", [[_dictOfPromises allKeys] description]);
+        }
+        for (id key in [_dictOfPromises allKeys]) {
+            Promise* p = [_dictOfPromises objectForKey: key];
+            [p performCancel]; // For an After Promise, cancel each predecessor not yet resolved
+        }
+        _dictOfPromises = nil;
+    } else if (predecessor) {
+        [predecessor performCancel];
+    }
+}
+
+- (void) cancel: (void (^)())cancelBlock
+{
+    _cancelBlock = cancelBlock;
+}
+
+/*******************************************************************
  Attach success and error blocks to an existing promise.
  Create a new Promise that will be fulfilled by these blocks.
  The new Promise is set to run on the same queue as this Promise.
@@ -378,7 +452,7 @@
  have Success and/or Error blocks attached. In any case they will
  not be called.
  
- When an "all" Promise is resolved, the result passed to its
+ When an "after" Promise is resolved, the result passed to its
  block is a disctionary of result objects that matches the array
  of Promises. The result from the second Promise in the array is
  found at [results objectForKey: @(2)].
@@ -388,19 +462,29 @@
 {
     int i = 0;
     
+    if (_debug) QNSLOG(@"%@", self.name);
+    
     self.resolutionType = RTAFTER;
     self.afterBlock = block;
     self.dictOfResults = [NSMutableDictionary new];
+    self.dictOfPromises = [NSMutableDictionary new];
+    // _prev is nil;
     // Prep the aggregated Promises
     for (Promise* p in arrayOfPromises) {
         i++;
+        // Save the Promise
+        [_dictOfPromises setObject: p
+                            forKey: @(i)];
+
+        // Make a space for the result, place a marker so we can know when a result has been posted
         [_dictOfResults setObject: [Promise class] // used as a unique marker
                            forKey: @(i)];
+
         p.resolutionType = RTAGGREGATED;
         p.next = self;
         p.aggregationIndex = i;
     }
-    if (self.debug>1) QNSLOG(@"\n%@\n%@", [self description], [_dictOfResults description]);
+    if (_debug>1) QNSLOG(@"\n%@\n%@", [self description], [_dictOfResults description]);
 
     // Prep the dependent Promise
     Promise* p0 = [[Promise alloc] init];
@@ -420,6 +504,7 @@
 {
     @synchronized(self) {
         if (self.debug) QNSLOG(@"%@ %d %d", self.name, index, self.resolutionType);
+        [_dictOfPromises removeObjectForKey: @(index)];
         if (result) {
             [_dictOfResults setObject: result
                                forKey: @(index)];
@@ -435,6 +520,7 @@
             }
         }
         if (self.debug>1) QNSLOG(@"%@ %d Ready", self.name, index);
+        _dictOfPromises = nil;
         [self resolve: self.dictOfResults];
     }
 }

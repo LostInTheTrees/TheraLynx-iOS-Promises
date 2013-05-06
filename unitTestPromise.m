@@ -19,8 +19,11 @@
 #define REJECT 3
 
 @implementation unitTestPromise {
+    BOOL allocDealloc;
+
     BOOL asyncNotComplete;
     BOOL deepDebug;
+    BOOL allocDebug;
 
     int32_t objectCount;
     
@@ -42,14 +45,16 @@
                         waitUntilDone: NO];
 }
 
-- (void) allocation
+- (void) allocation;
 {
+    if (allocDebug) QNSLOG(@"");
     objectCount++;
 }
 
-- (void) deallocation
+- (void) deallocation;
 {
     objectCount--;
+    if (allocDebug) QNSLOG(@"");
     if (!objectCount) {
         QNSLOG(@"***** Object Count is Zero");
     }
@@ -59,9 +64,13 @@
 {
     [super setUp];
     // Set-up code here.
-    [Promise utDelegate: self];
     asyncNotComplete = YES;
+
+    allocDealloc = NO;
+    if (allocDealloc) [Promise utDelegate: self];
+    
     deepDebug = NO;
+    allocDebug = NO;
     objectCount = 0;
     queueM = dispatch_get_main_queue();
     queueD = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
@@ -76,16 +85,16 @@
     [super tearDown];
 }
 
-- (void) test1
+- (void) test01_Single_Promise
 // Single Promise, resolved normally
 {
-    QNSLOG(@"**************** Test 1");
+    QNSLOG(@"**************** %@", __METHOD);
 
     __block NSObject* returnedResult;
     __block int blockThatRan;
     
-    Promise* promise = [self returnResult: @"result"
-                                    named: @"test1"];
+    __block Promise* promise = [self returnResult: @"result"
+                                            named: @"test1"];
     [promise then:^id(id result) {
         blockThatRan = 0;
         returnedResult = result;
@@ -97,7 +106,6 @@
         [self completeTest];
         return nil;
     }];
-     
     
     // Run main loop
     while (asyncNotComplete) {
@@ -112,12 +120,16 @@
     if (![(NSString*) returnedResult isEqualToString: @"result"]) {
         STFail(@"Test1 did not return the correct result");
     }
+    if (objectCount != 0) {
+        STFail(@"Test1: Objects not deallocated: %d", objectCount);
+    }
+    
 }
 
-- (void) test2
+- (void) test02_ResolveWithError
 // Single Promise, resolved with an Error
 {
-    QNSLOG(@"**************** Test 2");
+    QNSLOG(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -154,29 +166,17 @@
     }
 }
 
-- (void) test3
+- (void) test03_StringOfPromises
 // String of Promises
 {
-    QNSLOG(@"**************** Test 3");
+    QNSLOG(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
     
-    Promise* promise0 = [self returnResult: @"result"
-                                     named: @"test3A"];
+    Promise* promise = [self stringOf3Promises];
 
-    Promise* promise1 = [promise0 then:^id(id result) {
-        NSString* newResult = [(NSString*) result stringByAppendingString: @"1"];
-        return [self returnResult: newResult
-                            named: @"test3B"];
-    }];
-    Promise* promise2 = [promise1 then:^id(id result) {
-        NSString* newResult = [(NSString*) result stringByAppendingString: @"2"];
-        return [self returnResult: newResult
-                            named: @"test3C"];
-    }];
-    
-    [promise2 then:^id(id result) {
+    [promise then:^id(id result) {
         blockThatRan = 0;
         returnedResult = result;
         [self completeTest];
@@ -203,10 +203,10 @@
     }
 }
 
-- (void) test4
+- (void) test04_PropagateErrorThroughString
 // String of Promises, propagating an error result
 {
-    QNSLOG(@"**************** Test 4");
+    QNSLOG(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -255,10 +255,10 @@
     }
 }
 
-- (void) test5
+- (void) test05_DeepNesting
 // Deep nesting of Promises
 {
-    QNSLOG(@"**************** Test 5");
+    QNSLOG(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -304,10 +304,10 @@
     }
 }
 
-- (void) test6
+- (void) test06_PropagateErrorThroughNest
 // Deep nest of Promises, propagating an error result
 {
-    QNSLOG(@"**************** Test 6");
+    QNSLOG(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -356,10 +356,10 @@
     }
 }
 
-- (void) test7
+- (void) test07_ResolvedWtih
 // Test use of resolvedWith
 {
-    QNSLOG(@"**************** Test 7");
+    QNSLOG(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -400,10 +400,10 @@
     }
 }
 
-- (void) test8
-// String of Promises
+- (void) test08_After
+// Wait for a set of Promises
 {
-    QNSLOG(@"**************** Test 8");
+    QNSLOG(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -478,17 +478,16 @@
     if (![(NSNumber*) returnedResult isEqualToNumber: [NSNumber numberWithBool: YES]]) {
         STFail(@"Test8 returned NO");
     }
-} // test8
+} // test8_ResolvedWithError
 
-- (void) test9
+- (void) test09_ResolvedWithError
 // Test use of resolvedWithError
 {
-    QNSLOG(@"**************** Test 9");
+    QNSLOG(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
     
-    //deepDebug = YES;
     Promise* promise0 = [self goDeep: 2
                               result: @"result"
                                named: @"TestDeep"
@@ -525,9 +524,167 @@
     }
 } // test 9
 
+
+- (void) test10_CancelString
+// Cancel a set of Promises
+{
+    QNSLOG(@"**************** %@", __METHOD);
+    
+    __block int blocksRan = 0;
+    __block BOOL cancelBlockRan;
+    __block BOOL errorBlockRan = NO;
+    
+    Promise* promiseA0 = [self stringOf3Promises];
+    [promiseA0 cancel:^{
+        cancelBlockRan = YES;
+    }];
+    promiseA0.name = @"PromiseA";
+    
+    Promise* promiseA1 = [promiseA0 then:^id(id result) {
+        ++blocksRan; // Should not run after cancel
+        return [self returnResult: @"result1"
+                            after: 30
+                            named: @"test10A1"];
+    }];
+    
+    [promiseA1 then:^id(id result) {
+        [self completeTest];
+        return nil;
+    } error:^id(NSError* error) {
+        if (error.code == 9999) {
+            // Expected
+            errorBlockRan = YES;
+        } else {
+            ++blocksRan;
+        }
+        [self completeTest];
+        return nil;
+    }];
+    [promiseA0 cancel];
+    
+    // Run main loop
+    while (asyncNotComplete) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    }
+    
+    if (blocksRan) {
+        STFail(@"Test10 %d blocks ran despite being cancelled", blocksRan);
+    }
+    if (!cancelBlockRan) {
+        STFail(@"Test10 Cancel block did not run");
+    }
+    if (!errorBlockRan) {
+        STFail(@"Test10 Error block did not run");
+    }
+} // test10
+
+- (void) test11_CancelAfter
+// Cancel a set of Promises including an After
+{
+    QNSLOG(@"**************** %@", __METHOD);
+    
+    __block int blocksRan = 0;
+    __block BOOL cancelBlockRan;
+    
+    Promise* promiseA0 = [self stringOf3Promises];
+    [promiseA0 cancel:^{
+        cancelBlockRan = YES;
+    }];
+    
+    Promise* promiseA1 = [promiseA0 then:^id(id result) {
+        ++blocksRan;
+        return [self returnResult: @"resultA1"
+                            after: 30
+                            named: @"test11A1"];
+    }];
+    
+    Promise* promiseB = [self returnResult: @"resultB"
+                                     after: 30
+                                     named: @"test11B"];
+    
+    Promise* promiseC = [self returnResult: nil
+                                     after: 30
+                                     named: @"test11C"];
+    
+    Promise* promiseD = [self returnResult: [Promise getError: 9 description: @"Error 9"]
+                                     after: 30
+                                     named: @"test11D"];
+    
+    NSArray* arrayP = [NSArray arrayWithObjects: promiseA1, promiseB, promiseC, promiseD, nil];
+    
+    Promise* promise0 = [Promise promiseWithName: @"After"];
+    Promise* promise1 = [promise0 after: arrayP
+                                     do:^id(NSMutableDictionary *results) {
+                                         ++blocksRan;
+                                         return nil;
+                                     }];
+    [promise1 then:^id(id result) {
+        ++blocksRan;
+        [self completeTest];
+        return nil;
+    } error:^id(NSError* error) {
+        ++blocksRan;
+        return nil;
+    }];
+    
+    // Wait .5 s to make sure cancelled blocks have not run
+    Promise* wait = [self returnResult: @"result"
+                                 after: 500
+                                 named: @"wait"];
+    [wait then:^id(id result) {
+        [self completeTest];
+        return nil;
+    } error:^id(NSError* error) {
+        ++blocksRan; // Error is not expected
+        [self completeTest];
+        return nil;
+    }];
+    
+    // Cancel it all
+    [promise1 cancel];
+    
+    // Run main loop
+    while (asyncNotComplete) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    }
+    
+    if (blocksRan) {
+        STFail(@"Test11 %d blocks ran despite being cancelled", blocksRan);
+    }
+    
+    if (!cancelBlockRan) {
+        STFail(@"Test11 Cancel block did not run");
+    }
+    
+} // test11
+
 // Test use of reject:description
 // Test use of return to main queue
 // Test willRunOnMainQueue
+
+- (Promise*) stringOf3Promises
+// String of Promises
+{
+    if (deepDebug) QNSLOG(@"");
+    
+    Promise* promise0 = [self returnResult: @"result"
+                                     after: 10
+                                     named: @"StringOf3A"];
+    
+    Promise* promise1 = [promise0 then:^id(id result) {
+        NSString* newResult = [(NSString*) result stringByAppendingString: @"1"];
+        return [self returnResult: newResult
+                            after: 10
+                            named: @"StringOf3B"];
+    }];
+    Promise* promise2 = [promise1 then:^id(id result) {
+        NSString* newResult = [(NSString*) result stringByAppendingString: @"2"];
+        return [self returnResult: newResult
+                            after: 10
+                            named: @"StringOf3C"];
+    }];
+    return promise2;
+}
 
 - (Promise*) goDeep: (int)       n
              result: (id)        result
