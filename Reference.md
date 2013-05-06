@@ -1,18 +1,17 @@
 # Promise Class Reference
 ## Bob Carlson, TheraLynx LLC
+##### Version 1.01
 
 ### Overview
 The Promise class provides a way to execute sequences of asynchronous blocks in a controlled manner. Each Promise object represents a promise to deliver a result object or an error object to a block at some future time. When the result or error is delivered to the Promise though its resolve method, the appropriate block is scheduled on a queue and run.
 
 ### Tasks
 
-[PWN][promiseWithName]
-
 #### Creating Promises
 <pre>
 <a href="#promisewithname">+ (Promise*)   promiseWithName: (NSString*) name;</a>
-<a href="#resolvedWith">+ (Promise*)      resolvedWith: (id)        result;</a>
-<a href="#resolvedError">+ (Promise*) resolvedWithError: (NSInteger) code
+<a href="#resWith">+ (Promise*)      resolvedWith: (id)        result;</a>
+<a href="#resError">+ (Promise*) resolvedWithError: (NSInteger) code
                    description: (NSString*) desc;</a>
 </pre>
 
@@ -33,16 +32,22 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
           description: (NSString*) desc;</a>
 </pre>
 
+#### Cancelling Promises
+<pre>
+<a href="#cancel2">- (void) cancel: (void (^)())cancelBlock;</a>
+<a href="#cancel1">- (void) cancel;</a>
+</pre>
+
 #### Scheduling
 <pre>
-<a href="#next">- (Promise*)  next;</a>
 <a href="#setNext">- (void)   setNext: (Promise*) p;</a>
+<a href="#next">- (Promise*)  next;</a>
 <a href="#prev">- (Promise*)  prev;</a>
 
-<a href="#runOnMainQueue">- (void) runOnMainQueue;</a>
-<a href="#runDefault">- (void) runDefault;</a>
-<a href="#runLowPriority">- (void) runLowPriority;</a>
-<a href="#runHighPriority">- (void) runHighPriority;</a>
+<a href="#OnMainQueue">- (void) runOnMainQueue;</a>
+<a href="#Default">- (void) runDefault;</a>
+<a href="#LowPriority">- (void) runLowPriority;</a>
+<a href="#HighPriority">- (void) runHighPriority;</a>
 </pre>
 
 #### Debugging
@@ -57,7 +62,8 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 
 ### Class Methods
 
-#### promiseWithName [promiseWithName]
+<a name="promiseWithName"></a>
+#### promiseWithName
 
     + (Promise*) promiseWithName: (NSString*) name;
 
@@ -72,7 +78,8 @@ Equivalent to
 
 ***
 
-#### resolvedWith  [resolvedWith] 
+<a name="resWith"></a>
+#### resolvedWith   
     + (Promise*) resolvedWith: (id) result;
 
 ###### Return Value
@@ -83,7 +90,8 @@ Creates a new Promise that will resolve immediately with the object passed as re
 
 ***
 
-#### resolvedWithError [resolvedError]
+<a name="resError"></a>
+#### resolvedWithError
     + (Promise*) resolvedWithError: (NSInteger) code
                        description: (NSString*) desc;
 
@@ -95,25 +103,27 @@ Creates a new Promise that will resolve immediately with an error object. The er
 
 ***
 
-#### getError [getError]
+<a name="getError"></a>
+#### getError
     + (NSError*) getError: (NSInteger) code
     	      description: (NSString*) desc;
 
 ###### Return Value
 Returns an NSError object
 
-#### Discussion
+###### Discussion
 Creates a new NSError that is created from the code and description passed. This can be used to resolve a Promise with an error when it is appropriate to call [promise resolve:…].
 
 ***
 
 ### Instance Methods
 
-#### after:do: [after]
+<a name="after"></a>
+#### after:do:
     - (Promise*) after: (NSArray*)                             arrayOfPromises
                     do: (id (^)(NSMutableDictionary* results)) afterBlock;
 
-#### Return Value
+###### Return Value
 Returns a Promise* 
 
 ###### Discussion
@@ -121,10 +131,40 @@ Returns an "aggregate" Promise. When each of the Promises in arrayOfPromises has
 
 ***
 
-#### debug [debug]
+<a name="cancel1"></a>
+#### cancel 
+	- (void) cancel;
+
+###### Return Value
+None
+
+###### Discussion
+Cancel this promise and all its precedecessors.
+
+* When a Promise is cancelled, it is marked as cancelled and its predecessor is also cancelled. This will ripple back to the earliest Promise in the chain. The next and prev pointers and the block pointers of a cancelled Promise are set to nil.
+* If a Promise marked as cancelled is "resolved", nothing will happen, it's blocks will not be run.
+* If a Cancel Block is attached to a Promise. It will be run (synchronously) if the Promise is cancelled. The cancel block can use this opportunity to cancel the "asynchonous service" that it is waiting for. 
+* If a cancelled Promise has a dependent Promise an error will be used to resolve it. The error will have a code of 9999. 
+
+***
+
+<a name="cancel2"></a>
+#### cancel: 
+	- (void) cancel:  (void (^)())cancelBlock;
+
+###### Return Value
+None
+
+###### Discussion
+Set a Cancel Block to be run if this promise is cancelled.
+
+***
+
+<a name="debug"></a>
+#### debug 
 	- (NSNumber*) debug;
 
-#### Return Value
+###### Return Value
 Returns an NSNumber* 
 
 ###### Discussion
@@ -132,7 +172,8 @@ Returns the debug property value.
 
 ***
 
-#### setDebug [setDebug]
+<a name="setDebug"></a>
+#### setDebug
 	- (void) setDebug: (NSNumber*) debug;
 
 ###### Return Value
@@ -143,7 +184,8 @@ Sets the debug level. Defaults to zero. Zero means no debugging output. Set via 
 
 ***
 
-###### description [description]
+<a name="description"></a>
+#### description 
 	- (NSString*) description;
 
 ###### Return Value
@@ -154,7 +196,8 @@ The string returned is a description of the full chain of Promises. The prev poi
 
 ***
 
-#### name [name]
+<a name="name"></a>
+#### name 
 	- (NSString*) name;
 
 ###### Return Value
@@ -165,7 +208,8 @@ Returns an NSString that concatenates the basename with “.<generation>”. Gen
 
 ***
 
-#### setName [setName]
+<a name="setName"></a>
+#### setName 
 	- (void) setName: (NSString*) name;
 
 ###### Return Value
@@ -176,7 +220,8 @@ Sets basename to name and generation to zero. Then: and then:error: may incremen
 
 ***
 
-#### next [next]
+<a name="next"></a>
+#### next 
 	- (Promise*) next;
 
 ###### Return Value
@@ -187,7 +232,8 @@ It is not common to read this property except in debugging situations.
 
 ***
 
-#### setNext [setNext]
+<a name="setNext"></a>
+#### setNext 
 	- (void) setNext: (Promise*) p;
 
 ###### Return Value
@@ -198,18 +244,20 @@ The next pointer is set to point to another Promise. When the Success or Error b
 
 ***
 
-#### prev [prev]
+<a name="prev"></a>
+#### prev 
 	- (Promise*) prev;
 
 ###### Return Value
 The Promise referred to by the “prev” pointer.
 
-#### Discussion
+###### Discussion
 The prev pointer is set as the reverse of the next pointer. It is ONLY set when a next pointer is set. After [p1 setNext: p2], p1.next == p2 and p2.prev == p1. User for debugging only.
 
 ***
 
-#### queue [queue]
+<a name="queue"></a>
+#### queue 
 	- (dispatch_queue_t*) queue;
 
 ###### Return Value
@@ -220,7 +268,8 @@ The string returned is a description of the full chain of Promises. The prev poi
 
 ***
 
-#### setQueue [setQueue]
+<a name="setQueue"></a>
+#### setQueue 
 	- (void) setQueue: (dispatch_queue_t*) queue;
 
 ###### Return Value
@@ -231,7 +280,8 @@ Sets the dispatch queue to use for the success and error blocks.
 
 ***
 
-#### reject:description: [reject]
+<a name="reject"></a>
+#### reject:description:
 	- (void) reject: (NSInteger) code
 	    description: (NSString*) desc;
 
@@ -243,7 +293,8 @@ Resolves this Promise with an error constructed from the code and description pa
 
 ***
 
-#### resolve [resolve]
+<a name="resolve"></a>
+#### resolve 
 	- (void) resolve: (id) result;
 
 ###### Return Value
@@ -254,18 +305,20 @@ Resolves this Promise. If the result object is an NSError, the Error block is sc
 
 ***
 
+<a name="after"></a>
 #### prev [prev]
 	- (Promise*) prev;
 
 ###### Return Value
 The Promise referred to by the “prev” pointer.
 
-##### Discussion
+###### Discussion
 The prev pointer is set as the reverse of the next pointer. It is ONLY set when a next pointer is set. After [p1 setNext: p2], p1.next == p2 and p2.prev == p1. User for debugging only.
 
 ***
 
-#### runOnMainQueue [runOnMainQueue]
+<a name="OnMainQueue"></a>
+#### runOnMainQueue 
 	- (void) runOnMainQueue;
 
 ###### Return Value
@@ -276,7 +329,8 @@ Sets the queue of this Promise to the Main queue. Any blocks scheduled by this p
 
 ***
 
-#### runDefault [runDefault]
+<a name="Default"></a>
+#### runDefault 
 	- (void) runDefault;
 
 ###### Return Value
@@ -287,7 +341,8 @@ Sets the queue of this Promise to the Default Priority Global Queue. This is the
 
 ***
 
-#### runHighPriority [runHighPriority]
+<a name="HighPriority"></a>
+#### runHighPriority
 	- (void) runHighPriority;
 
 ###### Return Value
@@ -298,7 +353,8 @@ Sets the queue of this Promise to the High Priority Global Queue.
 
 ***
 
-#### runLowPriority [runLowPriority]
+<a name="LowPriority"></a>
+#### runLowPriority 
 	- (void) runLowPriority;
 
 ###### Return Value
@@ -309,7 +365,8 @@ Sets the queue of this Promise to the Low Priority Global Queue.
 
 ***
 
-#### then: [then]
+<a name="then"></a>
+#### then: 
 	- (Promise*) then: (id (^)(id result)) successBlock;
 
 ###### Return Value
@@ -324,7 +381,8 @@ is equivalent to
 
 ***
 
-#### then:error: [thenerror]
+<a name="thenerror"></a>
+#### then:error: 
 	- (Promise*) then: (id (^)(id result))      successBlock
     	        error: (id (^)(NSError* error)) errorBlock;
 

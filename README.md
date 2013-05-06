@@ -1,5 +1,6 @@
 # Promises for iOS
 ## Bob Carlson, TheraLynx LLC
+##### Version 1.01
 
 Promises are a method of controlling and understanding asynchrony. They originated in Javascript, but I have created an iOS version. So far, I am finding it to be a much better way to handle this problem. Promises allow for several valuable concepts.
 
@@ -180,3 +181,12 @@ You may want to execute a block the background to begin a sequence of asynchrono
 7.	The p0 block returns a Promise, so p1 is now waiting for that Promise. When it returns a resolution, the p1 blcok will be run.
 8.	The p1 block now runs in the foreground.
 9.	Returns nil. There is no dependent Promise, so the async sequence ends.
+
+### Cancellation
+
+Cancelling asynchronous tasks is occasionally necessary, so a cancel method is part of iOS Promises. Promises are not asynchronous tasks in and of themselves. They just receive results from asynchronous service providers and schedule blocks to handle them. Because of this, Promises do not cancel the asynchonous tasks themselves, but the user of a Promise can cancel the asynchronous task. There are three aspects to Promise cancellation.
+
+* When a Promise is cancelled, it is marked as cancelled and its predecessor is also cancelled. This will ripple back to the earliest Promise in the chain. The next and prev pointers and the block pointers of a cancelled Promise are set to nil.
+* If a Promise marked as cancelled is "resolved", nothing will happen, it's blocks will not be run.
+* A Cancel Block can be attached to a Promise. It will be run (synchronously) if the Promise is cancelled. The cancel block can use this opportunity to cancel the "asynchonous service" that it is waiting for. For example, a running NSUrlConnection could be cancelled.
+* If a cancelled Promise has a dependent Promise an error will be used to resolve it. The error will have a code of 9999. 
