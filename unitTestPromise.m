@@ -7,6 +7,7 @@
 //
 
 #import "unitTestPromise.h"
+#import <XCTest/XCTest.h>
 
 #define MAIN 0
 #define DEFAULT 1
@@ -47,16 +48,16 @@
 
 - (void) allocation;
 {
-    if (allocDebug) QNSLOG(@"");
+    if (allocDebug) NSLog(@"");
     objectCount++;
 }
 
 - (void) deallocation;
 {
     objectCount--;
-    if (allocDebug) QNSLOG(@"");
+    if (allocDebug) NSLog(@"");
     if (!objectCount) {
-        QNSLOG(@"***** Object Count is Zero");
+        NSLog(@"***** Object Count is Zero");
     }
 }
 
@@ -73,10 +74,9 @@
     allocDebug = NO;
     objectCount = 0;
     queueM = dispatch_get_main_queue();
-    queueD = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
     queueL = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0);
+    queueD = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
     queueH = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
-
 }
 
 - (void) tearDown
@@ -88,7 +88,7 @@
 - (void) test01_Single_Promise
 // Single Promise, resolved normally
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
 
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -114,14 +114,14 @@
     }
     
     if (blockThatRan) {
-        STFail(@"Test1 returned an error %@", returnedResult.description);
+        XCTFail(@"Test1 returned an error %@", returnedResult.description);
     }
 
     if (![(NSString*) returnedResult isEqualToString: @"result"]) {
-        STFail(@"Test1 did not return the correct result");
+        XCTFail(@"Test1 did not return the correct result");
     }
     if (objectCount != 0) {
-        STFail(@"Test1: Objects not deallocated: %d", objectCount);
+        XCTFail(@"Test1: Objects not deallocated: %d", objectCount);
     }
     
 }
@@ -129,7 +129,7 @@
 - (void) test02_ResolveWithError
 // Single Promise, resolved with an Error
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -158,22 +158,22 @@
     }
     
     if (blockThatRan == 0) {
-        STFail(@"Test1 did not run the error block %@", returnedResult.description);
+        XCTFail(@"Test1 did not run the error block %@", returnedResult.description);
     }
     
     if ([(NSError*) returnedResult code] != 101) {
-        STFail(@"Test1 did not return the correct code - %d", [(NSError*) returnedResult code]);
+        XCTFail(@"Test1 did not return the correct code - %d", [(NSError*) returnedResult code]);
     }
 }
 
 - (void) test03_StringOfPromises
 // String of Promises
 {
-    QNSLOG(@"**************** %@", __METHOD);
-    
+    NSLog(@"**************** %@", __METHOD);
+
     __block NSObject* returnedResult;
     __block int blockThatRan;
-    
+
     Promise* promise = [self stringOf3Promises];
 
     [promise then:^id(id result) {
@@ -187,6 +187,74 @@
         [self completeTest];
         return nil;
     }];
+
+
+    // Run main loop
+    while (asyncNotComplete) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    }
+
+    if (blockThatRan) {
+        XCTFail(@"Test3 returned an error %@", returnedResult.description);
+    }
+
+    if (![(NSString*) returnedResult isEqualToString: @"result12"]) {
+        XCTFail(@"Test3 did not return the correct result");
+    }
+}
+
+- (void) test03a_Queues
+// String of Promises
+{
+    NSLog(@"**************** %@", __METHOD);
+    
+    __block NSObject* returnedResult;
+
+    Promise* promise0 = [self returnResult: @"result"
+                                     after: 10
+                                     named: @"3A-0"];
+    // Default Priorty
+
+    Promise* promise1 =
+    [promise0 then:^id(id result) {
+        NSLog(@"Expected Queue: Default, Actual: %@", [Promise queueName]);
+        NSString* newResult = [(NSString*) result stringByAppendingString: @"1"];
+        return [self returnResult: newResult
+                            after: 10
+                            named: @"3A-1"];
+    }];
+
+    [promise1 runHighPriority];
+    Promise* promise2 =
+    [promise1 then:^id(id result) {
+        NSLog(@"Expected Queue: High, Actual: %@", [Promise queueName]);
+        NSString* newResult = [(NSString*) result stringByAppendingString: @"2"];
+        return [self returnResult: newResult
+                            after: 10
+                            named: @"3A-2"];
+    }];
+
+    [promise2 runLowPriority];
+    Promise* promise3 =
+    [promise2 then:^id(id result) {
+        NSLog(@"Expected Queue: Low, Actual: %@", [Promise queueName]);
+        NSString* newResult = [(NSString*) result stringByAppendingString: @"3"];
+        return [self returnResult: newResult
+                            after: 10
+                            named: @"3A-3"];
+    }];
+
+    Promise* promise4 =
+    [promise3 thenMainQ: ^id(id result) {
+        NSLog(@"Expected Queue: Main, Actual: %@", [Promise queueName]);
+        returnedResult = result;
+        [self completeTest];
+        return nil;
+    } error:^id(NSError* error) {
+        returnedResult = error;
+        [self completeTest];
+        return nil;
+    }];
     
     
     // Run main loop
@@ -194,19 +262,15 @@
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
     }
     
-    if (blockThatRan) {
-        STFail(@"Test3 returned an error %@", returnedResult.description);
-    }
-    
-    if (![(NSString*) returnedResult isEqualToString: @"result12"]) {
-        STFail(@"Test3 did not return the correct result");
+    if (![(NSString*) returnedResult isEqualToString: @"result123"]) {
+        XCTFail(@"Test03a did not return the correct result");
     }
 }
 
 - (void) test04_PropagateErrorThroughString
 // String of Promises, propagating an error result
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -247,18 +311,18 @@
     }
     
     if (blockThatRan == 0) {
-        STFail(@"Test4 did not run the error block %@", returnedResult.description);
+        XCTFail(@"Test4 did not run the error block %@", returnedResult.description);
     }
     
     if ([(NSError*) returnedResult code] != 101) {
-        STFail(@"Test4 did not return the correct code - %d", [(NSError*) returnedResult code]);
+        XCTFail(@"Test4 did not return the correct code - %d", [(NSError*) returnedResult code]);
     }
 }
 
 - (void) test05_DeepNesting
 // Deep nesting of Promises
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -296,18 +360,18 @@
     }
     
     if (blockThatRan) {
-        STFail(@"Test5 returned an error %@", returnedResult.description);
+        XCTFail(@"Test5 returned an error %@", returnedResult.description);
     }
     
     if (![(NSString*) returnedResult isEqualToString: @"result01234AB"]) {
-        STFail(@"Test5 did not return the correct result");
+        XCTFail(@"Test5 did not return the correct result");
     }
 }
 
 - (void) test06_PropagateErrorThroughNest
 // Deep nest of Promises, propagating an error result
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -348,18 +412,18 @@
     }
     
     if (blockThatRan == 0) {
-        STFail(@"Test6 did not run the error block %@", returnedResult.description);
+        XCTFail(@"Test6 did not run the error block %@", returnedResult.description);
     }
     
     if ([(NSError*) returnedResult code] != 6) {
-        STFail(@"Test6 did not return the correct code - %d", [(NSError*) returnedResult code]);
+        XCTFail(@"Test6 did not return the correct code - %d", [(NSError*) returnedResult code]);
     }
 }
 
 - (void) test07_ResolvedWtih
 // Test use of resolvedWith
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -392,58 +456,61 @@
     }
     
     if (blockThatRan) {
-        STFail(@"Test7 returned an error %@", returnedResult.description);
+        XCTFail(@"Test7 returned an error %@", returnedResult.description);
     }
     
     if (![(NSString*) returnedResult isEqualToString: @"result012A"]) {
-        STFail(@"Test7 did not return the correct result - %@", returnedResult.description);
+        XCTFail(@"Test7 did not return the correct result - %@", returnedResult.description);
     }
 }
 
 - (void) test08_After
 // Wait for a set of Promises
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
     
-    Promise* promiseA = [self returnResult: @"resultA"
-                                     named: @"test8A"];
+    NSMutableDictionary* dictP = [NSMutableDictionary new];
+    dictP[@"A"] = [self returnResult: @"resultA"
+                               named: @"test8A"];
     
-    Promise* promiseB = [self returnResult: @"resultB"
-                                     named: @"test8B"];
+    dictP[@"B"] = [self returnResult: @"resultB"
+                               named: @"test8B"];
     
-    Promise* promiseC = [self returnResult: nil
-                                     named: @"test8C"];
+    dictP[@"C"] = [self returnResult: nil
+                               named: @"test8C"];
     
-    Promise* promiseD = [self returnResult: [Promise getError: 9 description: @"Error 9"]
-                                     named: @"test8D"];
-    
-    NSArray* arrayP = [NSArray arrayWithObjects: promiseA, promiseB, promiseC, promiseD, nil];
+    dictP[@"D"] = [self returnResult: [Promise getError: 9 description: @"Error 9"]
+                               named: @"test8D"];
+
     Promise* promise0 = [Promise promiseWithName: @"After"];
-    Promise* promise1 = [promise0 after: arrayP
-                                     do:^id(NSMutableDictionary *results) {
+    Promise* promise1 = [promise0 after: dictP
+                                     do:^id(NSMutableDictionary *results, NSInteger errors) {
                                          // Check results
-                                         id rA = [results objectForKey: @(1)];
-                                         id rB = [results objectForKey: @(2)];
-                                         id rC = [results objectForKey: @(3)];
-                                         id rD = [results objectForKey: @(4)];
+                                         id rA = [results objectForKey: @"A"];
+                                         id rB = [results objectForKey: @"B"];
+                                         id rC = [results objectForKey: @"C"];
+                                         id rD = [results objectForKey: @"D"];
                                          id newReturn = [NSNumber numberWithBool: YES];
+                                         if (errors != 1) {
+                                             NSLog(@"Error count is %d, should be 1");
+                                         }
                                          if (![rA isEqualToString: @"resultA"]) {
-                                             QNSLOG(@"Failed A");
+                                             NSLog(@"Failed A");
                                              newReturn = [NSNumber numberWithBool: NO];
                                          }
                                          if (![rB isEqualToString: @"resultB"]) {
-                                             QNSLOG(@"Failed B");
+                                             NSLog(@"Failed B");
                                              newReturn = [NSNumber numberWithBool: NO];
                                          }
                                          if ([rC class] != [NSNull class]) { // Should be nil
-                                             QNSLOG(@"Failed C");
+                                             NSLog(@"Failed C");
                                              newReturn = [NSNumber numberWithBool: NO];
                                          }
                                          if (![rD isKindOfClass: [NSError class]]) { // Should be an NSError
-                                             QNSLOG(@"Failed D");
+                                             NSLog(@"Failed D");
                                              newReturn = [NSNumber numberWithBool: NO];
                                          }
                                          return newReturn;
@@ -468,22 +535,22 @@
     }
     
     if (blockThatRan) {
-        STFail(@"Test8 returned an error %@", returnedResult.description);
+        XCTFail(@"Test8 returned an error %@", returnedResult.description);
     }
     
     if (![returnedResult isKindOfClass: [NSNumber class]]) {
-        STFail(@"Test8 did not return a BOOL NSNumber");
+        XCTFail(@"Test8 did not return a BOOL NSNumber");
     }
     
     if (![(NSNumber*) returnedResult isEqualToNumber: [NSNumber numberWithBool: YES]]) {
-        STFail(@"Test8 returned NO");
+        XCTFail(@"Test8 returned NO");
     }
 } // test8_ResolvedWithError
 
 - (void) test09_ResolvedWithError
 // Test use of resolvedWithError
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block NSObject* returnedResult;
     __block int blockThatRan;
@@ -516,11 +583,11 @@
     }
     
     if (blockThatRan == 0) {
-        STFail(@"Test9 did not run the error block %@", returnedResult.description);
+        XCTFail(@"Test9 did not run the error block %@", returnedResult.description);
     }
     
     if ([(NSError*) returnedResult code] != 101) {
-        STFail(@"Test9 did not return the correct code - %@", returnedResult.description);
+        XCTFail(@"Test9 did not return the correct code - %@", returnedResult.description);
     }
 } // test 9
 
@@ -528,7 +595,7 @@
 - (void) test10_CancelString
 // Cancel a set of Promises
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block int blocksRan = 0;
     __block BOOL cancelBlockRan;
@@ -568,20 +635,20 @@
     }
     
     if (blocksRan) {
-        STFail(@"Test10 %d blocks ran despite being cancelled", blocksRan);
+        XCTFail(@"Test10 %d blocks ran despite being cancelled", blocksRan);
     }
     if (!cancelBlockRan) {
-        STFail(@"Test10 Cancel block did not run");
+        XCTFail(@"Test10 Cancel block did not run");
     }
     if (!errorBlockRan) {
-        STFail(@"Test10 Error block did not run");
+        XCTFail(@"Test10 Error block did not run");
     }
 } // test10
 
 - (void) test11_CancelAfter
 // Cancel a set of Promises including an After
 {
-    QNSLOG(@"**************** %@", __METHOD);
+    NSLog(@"**************** %@", __METHOD);
     
     __block int blocksRan = 0;
     __block BOOL cancelBlockRan;
@@ -590,31 +657,30 @@
     [promiseA0 cancel:^{
         cancelBlockRan = YES;
     }];
+
+    NSMutableDictionary* dictP = [NSMutableDictionary new];
+    dictP[@"A1"] = [promiseA0 then:^id(id result) {
+                                        ++blocksRan;
+                                        return [self returnResult: @"resultA1"
+                                                            after: 30
+                                                            named: @"test11A1"];
+                                    }];
+
+    dictP[@"B"] = [self returnResult: @"resultB"
+                               after: 30
+                               named: @"test11B"];
     
-    Promise* promiseA1 = [promiseA0 then:^id(id result) {
-        ++blocksRan;
-        return [self returnResult: @"resultA1"
-                            after: 30
-                            named: @"test11A1"];
-    }];
+    dictP[@"C"] = [self returnResult: nil
+                               after: 30
+                               named: @"test11C"];
     
-    Promise* promiseB = [self returnResult: @"resultB"
-                                     after: 30
-                                     named: @"test11B"];
-    
-    Promise* promiseC = [self returnResult: nil
-                                     after: 30
-                                     named: @"test11C"];
-    
-    Promise* promiseD = [self returnResult: [Promise getError: 9 description: @"Error 9"]
-                                     after: 30
-                                     named: @"test11D"];
-    
-    NSArray* arrayP = [NSArray arrayWithObjects: promiseA1, promiseB, promiseC, promiseD, nil];
-    
+    dictP[@"D"] = [self returnResult: [Promise getError: 9 description: @"Error 9"]
+                               after: 30
+                               named: @"test11D"];
+
     Promise* promise0 = [Promise promiseWithName: @"After"];
-    Promise* promise1 = [promise0 after: arrayP
-                                     do:^id(NSMutableDictionary *results) {
+    Promise* promise1 = [promise0 after: dictP
+                                     do:^id(NSMutableDictionary *results, NSInteger errors) {
                                          ++blocksRan;
                                          return nil;
                                      }];
@@ -649,11 +715,11 @@
     }
     
     if (blocksRan) {
-        STFail(@"Test11 %d blocks ran despite being cancelled", blocksRan);
+        XCTFail(@"Test11 %d blocks ran despite being cancelled", blocksRan);
     }
     
     if (!cancelBlockRan) {
-        STFail(@"Test11 Cancel block did not run");
+        XCTFail(@"Test11 Cancel block did not run");
     }
     
 } // test11
@@ -665,19 +731,22 @@
 - (Promise*) stringOf3Promises
 // String of Promises
 {
-    if (deepDebug) QNSLOG(@"");
+    if (deepDebug) NSLog(@"");
     
     Promise* promise0 = [self returnResult: @"result"
                                      after: 10
                                      named: @"StringOf3A"];
     
-    Promise* promise1 = [promise0 then:^id(id result) {
+    Promise* promise1 =
+    [promise0 then:^id(id result) {
         NSString* newResult = [(NSString*) result stringByAppendingString: @"1"];
         return [self returnResult: newResult
                             after: 10
                             named: @"StringOf3B"];
     }];
-    Promise* promise2 = [promise1 then:^id(id result) {
+
+    Promise* promise2 =
+    [promise1 then:^id(id result) {
         NSString* newResult = [(NSString*) result stringByAppendingString: @"2"];
         return [self returnResult: newResult
                             after: 10
@@ -704,7 +773,7 @@
     Promise* p;
     NSString* localName = [name stringByAppendingFormat: @"%d", n];
     
-    if (deepDebug) QNSLOG(@"%@", localName);
+    if (deepDebug) NSLog(@"%@", localName);
     if (n>0) {
         Promise* p0 = [self goDeep: n-1
                             result: result
@@ -713,7 +782,7 @@
         
         p= [p0 then:^id(id result) {
             NSString* newResult = [(NSString*) result stringByAppendingFormat: @"%d", n];
-            if (deepDebug) QNSLOG(@"goDeep Block %d - %@", n, newResult);
+            if (deepDebug) NSLog(@"goDeep Block %d - %@", n, newResult);
             return [self returnResult: newResult
                                 after: 5 * n
                                 named: [@"return" stringByAppendingFormat: @"%d", n]];
@@ -724,13 +793,13 @@
                               resolution: res];
         p= [p0 then:^id(id result) {
             NSString* newResult = [(NSString*) result stringByAppendingFormat: @"%d", n];
-            if (deepDebug) QNSLOG(@"goDeep Block %d - %@", n, newResult);
+            if (deepDebug) NSLog(@"goDeep Block %d - %@", n, newResult);
             return [self returnResult: newResult
                                 after: 5 * n
                                 named: [@"return" stringByAppendingFormat: @"%d", n]];
         }];
     }
-    if (deepDebug) QNSLOG(@"%@ Exit Promise:\n%@", localName, [p description]);
+    if (deepDebug) NSLog(@"%@ Exit Promise:\n%@", localName, [p description]);
     return p;
 }
 
@@ -783,16 +852,17 @@
     } else {
         queue = queueH;
     }
+    //NSLog(@"q: %d   Q: %@",q, [Promise queueName: queue]);
 
     if (res == RESOLVEWITH) {
         if (deepDebug)
-            QNSLOG(@"Resolved with %@", [result description]);
+            NSLog(@"Resolved with %@", [result description]);
         Promise* p = [Promise resolvedWith: result];
         p.name = @"resolvedWith ";
         return p;
     } else if (res == RESOLVEWITHERROR) {
         if (deepDebug)
-            QNSLOG(@"Resolved with Error 101");
+            NSLog(@"Resolved with Error 101");
         Promise* p = [Promise resolvedWithError: 101 description: @"error dec"];
         p.name = @"resolvedWith Error101";
         return p;
@@ -801,17 +871,9 @@
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, msecs * 1000000);
     dispatch_after(popTime, queue, ^(void){
         if (deepDebug) {
-            dispatch_queue_t q;
-            NSString* qname;
-            
-            q = dispatch_get_current_queue();
-            if (q == queueM) qname = @"MAIN";
-            if (q == queueD) qname = @"DEFAULT";
-            if (q == queueL) qname = @"LOW";
-            if (q == queueH) qname = @"HIGH";
-            QNSLOG(@"ReturnResult Block %@ %d Q: %@ - %@", name, res, qname, [result description]);
+            NSLog(@"ReturnResult Block %@ %d Q: %@ - %@", name, res, [Promise queueName: queue], [result description]);
         } /* else {
-            QNSLOG(@"ReturnResult Block %@ - %@", name, [result description]);
+            NSLog(@"ReturnResult Block %@ - %@", name, [result description]);
         } */
         if (res == NORMAL) {
             [p resolve: result];

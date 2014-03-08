@@ -6,11 +6,11 @@
 //
 //
 
-#import <SenTestingKit/SenTestingKit.h>
+#import <XCTest/XCTest.h>
 #import "Promise.h"
 #import "UnitTest.h"
 
-@interface unitTestPromise : SenTestCase
+@interface unitTestPromise : XCTestCase
 <UnitTest>
 
 @end

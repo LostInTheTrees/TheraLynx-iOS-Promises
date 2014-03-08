@@ -1,28 +1,41 @@
 # Promise Class Reference
 ## Bob Carlson, TheraLynx LLC
-##### Version 1.01
+##### Version 2.0.0
 
-### Overview
-The Promise class provides a way to execute sequences of asynchronous blocks in a controlled manner. Each Promise object represents a promise to deliver a result object or an error object to a block at some future time. When the result or error is delivered to the Promise though its resolve method, the appropriate block is scheduled on a queue and run.
+## Overview
+The Promise class provides a way to execute sequences of asynchronous blocks 
+in a controlled manner. Each Promise object represents a promise to deliver 
+a result object or an NSError object to a block at some future time. When the 
+result or error is delivered to the Promise though its resolve method, the 
+appropriate block is scheduled on a queue and run.
 
-### Tasks
+## Tasks
 
 #### Creating Promises
 <pre>
 <a href="#promisewithname">+ (Promise*)   promiseWithName: (NSString*) name;</a>
 <a href="#resWith">+ (Promise*)      resolvedWith: (id)        result;</a>
+<a href="#resWithNil">+ (Promise*)          resolved;</a>
 <a href="#resError">+ (Promise*) resolvedWithError: (NSInteger) code
                    description: (NSString*) desc;</a>
 </pre>
 
-#### Scheduling Blocks
+#### Resolution Blocks
 <pre>
-<a href="#after">- (Promise*) after: (NSArray*)                             arrayOfPromises
-   	            do: (id (^)(NSMutableDictionary* results)) afterBlock;</a>
+<a href="#after">+ (Promise*)     after: (NSDictionary*)         promises
+   	                do: (PromiseIterationBlock) afterBlock;</a>
+<a href="#after">- (Promise*)     after: (NSDictionary*)         promises
+   	                do: (PromiseIterationBlock) afterBlock;</a>
 
-<a href="#then">- (Promise*)  then: (id (^)(id result))      successBlock;</a>
-<a href="#thenerror">- (Promise*)  then: (id (^)(id result))      successBlock
-   	         error: (id (^)(NSError* error)) errorBlock;</a>
+<a href="#then">- (Promise*)      then: (PromiseSuccessBlock)   successBlock;</a>
+<a href="#thenerror">- (Promise*) thenError: (PromiseSuccessBlock)   successBlock;</a>
+<a href="#then1">- (Promise*)      then: (PromiseSuccessBlock)   successBlock
+   	             error: (PromiseErrorBlock)     errorBlock;</a>
+
+<a href="#thenmainq">- (Promise*)      thenMainQ: (PromiseSuccessBlock)   successBlock;</a>
+<a href="#thenmain2">- (Promise*) thenErrorMainQ: (PromiseSuccessBlock)   successBlock;</a>
+<a href="#thenmainq1">- (Promise*)      thenMainQ: (PromiseSuccessBlock)   successBlock
+   	                  error: (PromiseErrorBlock)     errorBlock;</a>
 </pre>
 
 #### Resolving Promises
@@ -34,7 +47,7 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 
 #### Cancelling Promises
 <pre>
-<a href="#cancel2">- (void) cancel: (void (^)())cancelBlock;</a>
+<a href="#cancel2">- (void) cancel: (PromiseCancelBlock) cancelBlock;</a>
 <a href="#cancel1">- (void) cancel;</a>
 </pre>
 
@@ -44,23 +57,43 @@ The Promise class provides a way to execute sequences of asynchronous blocks in 
 <a href="#next">- (Promise*)  next;</a>
 <a href="#prev">- (Promise*)  prev;</a>
 
+<a href="#inContext">- (void) runInContext: (NSManagedObjectContext*) context;</a>
 <a href="#OnMainQueue">- (void) runOnMainQueue;</a>
+<a href="#HighPriority">- (void) runHighPriority;</a>
 <a href="#Default">- (void) runDefault;</a>
 <a href="#LowPriority">- (void) runLowPriority;</a>
-<a href="#HighPriority">- (void) runHighPriority;</a>
+<a href="#LowestPriority">- (void) runLowestPriority;</a>
 </pre>
 
 #### Debugging
 <pre>
-<a href="#debug">- (NSNumber*) debug;</a>
-<a href="#setDebug">- (void)   setDebug: (NSNumber*) debug;</a>
-<a href="#name">- (NSString*)  name;</a>
-<a href="#setName">- (void)    setName: (NSString*) name;</a>
+<a href="#debug">@property (readwrite...) NSInteger debug</a>
+<a href="#name">@property (readwrite...) NSString* name</a>
 </pre>
 
 *****
 
-### Class Methods
+## Class Methods
+
+<a name="after"></a>
+#### after:do:
+<pre>+ (Promise*) after: (NSDictionary*)     dictOfPromises
+                do: (<a href="#blocks">PromiseAfterBlock</a>) afterBlock;
+</pre>
+
+###### Return Value
+Returns a Promise* 
+
+###### Discussion
+Returns an "aggregate" Promise. When each of the Promises in dictOfPromises has 
+delivered its result, the afterBlock will be scheduled and run. The object passed 
+to the afterBlock is a dictionary of the results. Each key of each result is the 
+key of the Promise it is resolving. The result may be an NSError or nil. There is no Error 
+block for an Aggregate Promise so errors must be found explicitly. However, there is 
+an "errors" argument to the after block that gives the number of errors. Errors do 
+not "pass through" aggregate Promises as they do with others that lack an Error block.
+
+***
 
 <a name="promiseWithName"></a>
 #### promiseWithName
@@ -75,6 +108,31 @@ Equivalent to
 
 	Promise* p = [[Promise alloc] init];
 	p.name = @”name”;
+
+***
+
+<a name="queueName"></a>
+#### queueName
+
+    + (NSString*) queueName;
+
+###### Return Value
+Returns a string identifying the current queue.
+
+###### Discussion
+This may be used within a resolution block to find the name that the Promise Class associates with the current queue. It returns an empty string when the current queue is not a global queue. It is intended for debugging only.
+
+***
+
+<a name="resWithNil"></a>
+#### resolved   
+    + (Promise*) resolved;
+
+###### Return Value
+Returns a Promise
+
+###### Discussion
+Creates a new Promise that will resolve immediately with nil as the result. 
 
 ***
 
@@ -99,7 +157,10 @@ Creates a new Promise that will resolve immediately with the object passed as re
 Returns a Promise
 
 ###### Discussion
-Creates a new Promise that will resolve immediately with an error object. The error object is created from the code and description passed using [Promise getError:description:]. When a Promise is resolved with this object, the error block will be run.
+Creates a new Promise that will resolve immediately with an error object. 
+The error object is created from the code and description passed using 
+[Promise getError:description:]. When a Promise is resolved with this object, 
+the error block will be run.
 
 ***
 
@@ -116,18 +177,85 @@ Creates a new NSError that is created from the code and description passed. This
 
 ***
 
-### Instance Methods
+## Properties
+
+<a name="context"></a>
+#### context 
+	@property (readwrite, weak...) NSManagedObjectContext* context;
+
+If context is set, any blocks executed by this promise will be 
+executed on the queue associated with the context, allowing 
+ManagedObjects to be easily referenced in the background. 
+
+***
+
+<a name="debug"></a>
+#### debug 
+	@property (readwrite...) NSInteger debug;
+
+The debug property value. Zero by default, no debug logging. Value of one or greater enables debug logging.
+Successor promises inherit the debug value of their predecessors when returned by the then or similar methods.
+
+***
+
+<a name="name"></a>
+#### name 
+	@property (readwrite...) NSString* name;
+
+When you set name, the basename is set. When read, name returns an NSString* that concatenates the basename 
+with “.serialNumber”. SerialNumber is a property that consists of a unique number for each Promise. 
+See the serialNumber propertiy. 
+
+***
+
+<a name="next"></a>
+#### next 
+	@property (readwrite...) Promise* next;
+
+Returns the Promise that is waiting for this Promise.
+It is not common to read this property except in debugging situations.
+
+The next pointer can be set to point to another Promise. When the Success or Error block returns an object, 
+whatever Promise is “next” is resolved by the return object. The next pointer is usually set by then: or 
+then:error:. It is rarely set explicitly.
+
+***
+
+<a name="prev"></a>
+#### prev 
+	@property (readwrite...) Promise* prev;
+	
+The prev pointer is set as the inverse of the next pointer. It is ONLY set when a next pointer is set. After p1.next = p2, p1.next == p2 and p2.prev == p1. Used for debugging only.
+
+***
+
+<a name="queue"></a>
+#### queue
+	@property (readwrite...) dispatch_queue_t* queue;
+
+The dispatch queue to use for the resolution blocks. It not recommended to use this property for anything but debugging.
+
+***
+
+## Instance Methods
 
 <a name="after"></a>
 #### after:do:
-    - (Promise*) after: (NSArray*)                             arrayOfPromises
-                    do: (id (^)(NSMutableDictionary* results)) afterBlock;
+<pre>- (Promise*) after: (˜NSDictionary*)    dictOfPromises
+                do: (<a href="#blocks">PromiseAfterBlock</a>) afterBlock;
+</pre>
 
 ###### Return Value
 Returns a Promise* 
 
 ###### Discussion
-Returns an "aggregate" Promise. When each of the Promises in arrayOfPromises has delivered its result, the afterBlock will be scheduled and run. The object passed to the afterBlock is a dictionary of the results. Each result may be accessed via [results objectForKey: @(i)]; where i is the ordinal of the original Promise in arrayOfPromises. The key for the second result is @(2) and so on. The result may be an NSError. There is no Error block for an Aggregate Promise so errors must be found explicitly. Errors do not "pass through" aggregate Promises as they do with others that lack an Error block.
+Returns an "aggregate" Promise. When each of the Promises in dictOfPromises has 
+delivered its result, the afterBlock will be scheduled and run. The object passed 
+to the afterBlock is a dictionary of the results. Each key of each result is the 
+key of the Promise it is resolving. The result may be an NSError or nil. There is no Error 
+block for an Aggregate Promise so errors must be found explicitly. However, there is 
+an "errors" argument to the after block that gives the number of errors. Errors do 
+not "pass through" aggregate Promises as they do with others that lack an Error block.
 
 ***
 
@@ -160,30 +288,6 @@ Set a Cancel Block to be run if this promise is cancelled.
 
 ***
 
-<a name="debug"></a>
-#### debug 
-	- (NSNumber*) debug;
-
-###### Return Value
-Returns an NSNumber* 
-
-###### Discussion
-Returns the debug property value.
-
-***
-
-<a name="setDebug"></a>
-#### setDebug
-	- (void) setDebug: (NSNumber*) debug;
-
-###### Return Value
-None
-
-###### Discussion
-Sets the debug level. Defaults to zero. Zero means no debugging output. Set via promise.debug = <number>.
-
-***
-
 <a name="description"></a>
 #### description 
 	- (NSString*) description;
@@ -196,87 +300,20 @@ The string returned is a description of the full chain of Promises. The prev poi
 
 ***
 
-<a name="name"></a>
-#### name 
-	- (NSString*) name;
+<a name="Iterate"></a>
+#### iterate: 
+	- (Promise*) iterate: (id(^)(id result, NSInteger step)) iterationBlock;
 
 ###### Return Value
-Returns an NSString*
+Returns a new Promise.
 
 ###### Discussion
-Returns an NSString that concatenates the basename with “.<generation>”. Generation is an internal property that consists of a number. Generation defaults to zero, but is incremented when Promises are strung together with then: and then:error:.
+Iterate provides a method for executing the same block repeatedly. In an iterate block, when the block returns
+a Promise, when that Promise is resolved, the iterate block is run again with the resolution object as the result.
+If the block returns nil or any non-Promise object, the iteration block is completed.
 
-***
-
-<a name="setName"></a>
-#### setName 
-	- (void) setName: (NSString*) name;
-
-###### Return Value
-None
-
-###### Discussion
-Sets basename to name and generation to zero. Then: and then:error: may increment generation. Use promise.name = @”name”.
-
-***
-
-<a name="next"></a>
-#### next 
-	- (Promise*) next;
-
-###### Return Value
-Returns the Promise that is waiting for this Promise.
-
-###### Discussion
-It is not common to read this property except in debugging situations.
-
-***
-
-<a name="setNext"></a>
-#### setNext 
-	- (void) setNext: (Promise*) p;
-
-###### Return Value
-None
-
-###### Discussion
-The next pointer is set to point to another Promise. When the Success or Error blocks return an object, whatever Promise is “next” is resolved by the return object. The next pointer is usually set by then: or then:error:. It is rarely set explicitly.
-
-***
-
-<a name="prev"></a>
-#### prev 
-	- (Promise*) prev;
-
-###### Return Value
-The Promise referred to by the “prev” pointer.
-
-###### Discussion
-The prev pointer is set as the reverse of the next pointer. It is ONLY set when a next pointer is set. After [p1 setNext: p2], p1.next == p2 and p2.prev == p1. User for debugging only.
-
-***
-
-<a name="queue"></a>
-#### queue 
-	- (dispatch_queue_t*) queue;
-
-###### Return Value
-Returns an NSString*
-
-###### Discussion
-The string returned is a description of the full chain of Promises. The prev pointers are used to backtrack to the oldest Promise in the chain.
-
-***
-
-<a name="setQueue"></a>
-#### setQueue 
-	- (void) setQueue: (dispatch_queue_t*) queue;
-
-###### Return Value
-None
-
-###### Discussion
-Sets the dispatch queue to use for the success and error blocks.
+The Promise returned by the iterate method is the successor to the iterate block. It will be resolved when 
+the iterate block returns anything other than a Promise.
 
 ***
 
@@ -314,6 +351,21 @@ The Promise referred to by the “prev” pointer.
 
 ###### Discussion
 The prev pointer is set as the reverse of the next pointer. It is ONLY set when a next pointer is set. After [p1 setNext: p2], p1.next == p2 and p2.prev == p1. User for debugging only.
+
+***
+
+<a name="inContext"></a>
+#### runInContext 
+	- (void) runInContext: (NSManagedObjectContext*) context;
+
+###### Return Value
+None
+
+###### Discussion
+Equivalent to setting the context property.
+If context is set, any blocks executed by this promise will be 
+executed on the queue associated with the context, allowing 
+ManagedObjects to be easily referenced in the background. 
 
 ***
 
@@ -365,9 +417,21 @@ Sets the queue of this Promise to the Low Priority Global Queue.
 
 ***
 
+<a name="LowestPriority"></a>
+#### runLowestPriority 
+	- (void) runLowestPriority;
+
+###### Return Value
+None
+
+###### Discussion
+Sets the queue of this Promise to the Background Global Queue.
+
+***
+
 <a name="then"></a>
 #### then: 
-	- (Promise*) then: (id (^)(id result)) successBlock;
+	- (Promise*) then: (<a href="#blocks">PromiseSuccessBlock</a>) successBlock;
 
 ###### Return Value
 Returns a new Promise.
@@ -377,17 +441,112 @@ Returns a new Promise.
 
 is equivalent to  
 
-	[promise then: successBlock error: nil];
+	[promise then: successBlock 
+	        error: nil];
 
 ***
 
-<a name="thenerror"></a>
+<a name="then1"></a>
 #### then:error: 
-	- (Promise*) then: (id (^)(id result))      successBlock
-    	        error: (id (^)(NSError* error)) errorBlock;
+<pre>- (Promise*) then: (<a href="#blocks">PromiseSuccessBlock</a>) successBlock
+            error: (<a href="#blocks">PromiseErrorBlock</a>) errorBlock;</pre>
 
 ###### Return Value
 Returns a Promise*
 
 ###### Discussion
 Assigns success and error blocks to the promise. Creates a new dependent Promise. The dependent Promise is set as the value of next of the current Promise. The dependent Promise inherits the queue and name of the current Promise. The dependent Promise’s generation is set to the generation of the current Promise plus 1. Thus in a string of then blocks, if the first Promise is named xyzzy, the name property will return xyzzy.0 for the first Promise in the string, xyzzy.1 for the second, xyzzy.2 for the third and so on.
+
+***
+
+<a name="then2"></a>
+#### thenerror: 
+<pre>- (Promise*) then: (<a href="#blocks">PromiseSuccessBlock</a>) successBlock</pre>
+
+###### Return Value
+Returns a Promise*
+
+###### Discussion
+Assigns the same block to the Promise as both success and error blocks. 
+See <a href="#then1">then:error:</a>.
+
+***
+
+<a name="thenMainQ"></a>
+#### thenMainQ: 
+<pre>- (Promise*) thenMainQ: (<a href="#blocks">PromiseSuccessBlock</a>) successBlock;</pre>
+
+###### Return Value
+Returns a new Promise.
+
+###### Discussion
+<pre>[promise thenMainQ: successBlock];
+
+is equivalent to  
+
+[promise then: successBlock error: nil];
+[promise runOnMainQ];
+
+See <a href="#then1">then:error:</a>.
+</pre>
+***
+
+<a name="thenMainQ1"></a>
+#### thenMainQ:error: 
+<pre>- (Promise*) thenMainQ: (<a href="#blocks">PromiseSuccessBlock</a>) successBlock
+    	         error: (<a href="#blocks">PromiseErrorBlock</a>)   errorBlock;</pre>
+
+###### Return Value
+Returns a new Promise.
+
+###### Discussion
+<pre>[promise thenMainQ: successBlock error: errorBlock];
+
+is equivalent to  
+
+[promise then: successBlock error: errorBlock];
+[promise runOnMainQ];
+
+See <a href="#then1">then:error:</a>.
+</pre>
+
+***
+<a name="thenMainQ2"></a>
+#### thenErrorMainQ: 
+<pre>- (Promise*) thenErrorMainQ: (<a href="#blocks">PromiseSuccessBlock</a>) successBlock;</pre>
+
+###### Return Value
+Returns a new Promise.
+
+###### Discussion
+<pre>[promise thenMainQ: successBlock error: errorBlock];
+
+is equivalent to  
+
+[promise then: successBlock error: errorBlock];
+[promise runOnMainQ];
+
+See <a href="#then1">then:error:</a>.
+</pre>
+
+<a name="blocks"></a>
+## Block Signatures
+	typedef   id (^PromiseBlock) (id result);
+Called when the Promise is resolved successfully. Result may be nil or any object including an NSError.
+
+	typedef   id (^PromiseSuccessBlock) (id result);
+Called when the Promise is resolved successfully. Result may be nil or any object that is not an NSError.
+
+	typedef   id (^PromiseErrorBlock) (NSError* error);
+Called when the Promise is resolved with an error.
+
+	typedef   id (^PromiseAfterBlock) (NSMutableDictionary* results,  NSInteger errors);
+Called when an "after" promise is resolved. Results is a dictionary of results keyed by the same keys 
+as the dictionary of Promises used to create the after Promise. The individual result objects may be NSErrors. 
+Errors contains the number of original Promises resolved by NSErrors.
+
+	typedef   id (^PromiseIterationBlock) (id result, NSInteger step);
+Called when an "iterate" promise is resolved. Step will be zero on the first call and will be incremented by one on each additional call. When an iterate block returns a Promise, the iterate block will be run again when the returned Promise is resolved. Any other return will run the "next" Promise.
+
+	typedef void (^PromiseCancelBlock) (void);
+Called when the Promise is cancelled.

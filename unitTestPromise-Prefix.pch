@@ -6,6 +6,7 @@
     #import <UIKit/UIKit.h>
     #import <Foundation/Foundation.h>
 
-    #define UNITTEST
+    #define UNITTEST 1
     #import "definesOpen.h"
+    #import "Helpers.h"
 #endif

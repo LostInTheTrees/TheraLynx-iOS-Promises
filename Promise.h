@@ -1,5 +1,5 @@
 /*******************************************************************
- iOS Promises - Version 1.01
+ iOS Promises
  
  Promise.h
 
@@ -17,16 +17,36 @@
  "Bob Carlson, TheraLynx LLC".
  *******************************************************************/
 #import <Foundation/Foundation.h>
-#ifdef UNITTEST
-    #import "UnitTest.h"
-#endif
+#import "UnitTest.h"
+
+typedef id (^PromiseBlock)          (id result);
+typedef id (^PromiseSuccessBlock)   (id result);
+typedef id (^PromiseErrorBlock)     (NSError* error);
+typedef id (^PromiseAfterBlock)     (NSMutableDictionary* results,
+                                     NSInteger errors);
+typedef id (^PromiseIterationBlock) (id result,
+                                     NSInteger step);
+
+typedef void (^PromiseCancelBlock)  (void);
+
 @interface Promise : NSObject
 
+/*******************************************************************
+ promise.errorBlock = 
+ *******************************************************************/
 @property (readwrite, strong, nonatomic) Promise*         next;
 @property (readwrite, weak,   nonatomic) Promise*         prev;
 @property (readwrite, strong, nonatomic) dispatch_queue_t queue;
 @property (readwrite,         nonatomic) NSInteger        debug;
+@property (readwrite,         nonatomic) NSInteger        serialNumber;
 @property (readwrite, strong, nonatomic) NSString*        name;
+
+/*******************************************************************
+ If context is set, any blocks executed by this promise will be
+ executed on the queue associated with the context, allowing
+ MOs to be easily referenced in the background. 
+ *******************************************************************/
+@property (readwrite, weak,   nonatomic) NSManagedObjectContext* context;
 
 /*******************************************************************
  promiseWithName creates a new Promise with the name property set 
@@ -35,9 +55,10 @@
 
 /*******************************************************************
  resolvedWith: and resolvedWithError: create Promises that trigger 
- as soon as a "next" Promise is set
+ as soon as a "next" Promise is set.
  *******************************************************************/
 + (Promise*)      resolvedWith: (id)        result;
++ (Promise*)      resolved;                          // Promise resolved with nil
 
 + (Promise*) resolvedWithError: (NSInteger) code
                    description: (NSString*) desc;
@@ -66,39 +87,72 @@
  
  At least in a debug build, any error unhandled by an error block
  should cause an exception.
+ 
+ thenError: and thenErrorMainQ: returns both normal result and
+ error result to the same block.
  *******************************************************************/
-- (Promise*) then: (id   (^)(id result))      successBlock;
+- (Promise*)      then: (PromiseSuccessBlock) successBlock
+                 error: (PromiseErrorBlock)   errorBlock;
+- (Promise*)      then: (PromiseSuccessBlock) successBlock;
+- (Promise*) thenError: (PromiseBlock)        promiseBlock;
 
-- (Promise*) then: (id   (^)(id result))      successBlock
-            error: (id   (^)(NSError* error)) errorBlock;
+- (Promise*)      thenMainQ: (PromiseSuccessBlock) successBlock
+                      error: (PromiseErrorBlock)   errorBlock;
+- (Promise*)      thenMainQ: (PromiseSuccessBlock) successBlock;
+- (Promise*) thenErrorMainQ: (PromiseBlock)        promiseBlock;
 
-- (void)   cancel: (void (^)())               cancelBlock;
+- (void) cancel: (PromiseCancelBlock) cancelBlock;
+
+/*******************************************************************
+ iterate:
+ 
+ The iteration block works similarly to a then block, but with a
+ difference that allows a sequence of similar operations to be 
+ performed serially as in a for loop.
+ 
+ In a then: block, return <promise> means to execute the 'next' 
+ promise block when the returned promise is resolved. In an 
+ iteration: block, return <promise> means execute the iteration 
+ block again when the promise is resolved. The integer 'step'
+ provides some context to the block code. It will be set to zero 
+ on the first iteration and be incremented by 1 on each successive 
+ iteration.
+ 
+ If a non-promise object or nil is returned by the iteration block
+ then the loop will be terminated and the object (or nil) will be
+ used to resolve the current promise and the object will be passed 
+ to the 'next' block.
+ *******************************************************************/
+- (Promise*) iterate: (id(^)(id result, NSInteger step)) iterationBlock;
 
 /*******************************************************************
  after creates a promise that is resolved when all promises in the
- arrayOfPromises are resolved. None of these promises should already
+ dictOfPromises are resolved. None of these promises should already
  have Success and/or Error blocks attached. In any case they will
  not be called.
  
- When an "all" Promise is resolved, the result passed to its
- block is a dictionary of result objects that matches the array
- of Promises. The result from the second Promise in the array is
- found at [results objectForKey: @(2)].
+ When an "after" Promise is resolved, the result passed to its
+ block is a dictionary of result objects that matches the dictionary
+ of Promises. The key for the promise is the key for the result.
  
- Note that if an "after" promise is returned from a Success or Error
- block, it becomes a pass-through Promise and the receiving Success
- block must be prepared for an NSMutableDictionary like the "do"
- block.
- 
- The error block, if it exists, is called when one or more of the 
- results in the dictionary are NSErrors.
+ The signature of the PromiseAfterBlock includes an errors argument.
+ It gives the number of results in the dictionary of results that
+ are NSErrors.
  *******************************************************************/
-- (Promise*) after: (NSArray*)                             arrayOfPromises
-                do: (id (^)(NSMutableDictionary* results)) block;
++ (Promise*) after: (NSDictionary*)     dictOfPromises
+                do: (PromiseAfterBlock) block;
 
-- (Promise*) after: (NSArray*)                             arrayOfPromises
-                do: (id (^)(NSMutableDictionary* results)) block
-             error: (id (^)(NSMutableDictionary* results)) block;
+- (Promise*) after: (NSDictionary*)     dictOfPromises
+                do: (PromiseAfterBlock) block;
+
+/*******************************************************************
+ rerun:
+ 
+ Rerun the same block when the new promise resolves. Use this to 
+ construct a for loop pattern. In the block, call rerun method and
+ then return nil.
+ *******************************************************************/
+- (void) rerun: (Promise*) rerunPromise;
 
 /*******************************************************************
  Resolve triggers a Promise with the result object
@@ -133,12 +187,14 @@
 
  These methods cause the blocks to run on the specified global queues.
  *******************************************************************/
+- (void) runInContext: (NSManagedObjectContext*) context;
 - (void) runOnMainQueue;
-- (BOOL) willRunOnMainQueue;
-// Test whether this Promise's blocks will run on the main queue
-
 - (void) runDefault;
 - (void) runLowPriority;
 - (void) runHighPriority;
+- (void) runLowestPriority;
+
++ (NSString*) queueName;
++ (NSString*) queueName: (dispatch_queue_t) queue;
 
 @end
